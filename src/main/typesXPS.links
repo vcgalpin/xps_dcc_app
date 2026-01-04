@@ -1,0 +1,185 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module of mainXPS.links
+#
+# types for XPS Curator
+
+# types for accessing tables that store the XML DCC
+
+typename XmlAttribute = (
+           dde:String,
+           attr:String,
+           value:String,
+           tt_from:DateTime,
+           tt_to:DateTime
+         ); 
+
+typename XmlNode = (
+           dde:String,
+           ddeList:[Int],
+           tag:String,
+           attrs: [XmlAttribute],
+           text:String,
+           path:String,
+           path_id:Int,
+           tt_from:DateTime,
+           tt_to:DateTime,
+           hide:Bool,
+           original:Bool
+         );
+
+# nested data structure based on the XPS portal tables
+# each includes data from subsidiary tables
+
+# the final data structure Instruments contains
+# - list of instrumentlines (the XPS portal name for calibration event)
+# - list of calibrationevents 
+ 
+typename CatResult = ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	spectrumcategoryid: Int,          # FK on spectrumData.id
+	groupid: Int,                     # FK on calibrationGroup.id
+	filename: String,
+	passenergy: Float,                # NOT NULL
+	block: String,
+	power: Float,                     # NOT NULL
+	xaxisvalue: String,
+	yaxisvalue: String,
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String           # uuid NOT NULL
+       );
+
+typename CalCert = ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	certificatenumber: String,
+	groupid: Int,                     # FK on calibrationGroup.id
+	versionid: Int,                   # NOT NULL
+	filepath: String,
+	dateofissue: DateTime,            # NOT NULL
+	dateofexpiry: DateTime,           # NOT NULL
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String           # uuid NOT NULL
+        );
+
+typename CalGroup = ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	sequence: Int,                    # NOT NULL
+	uncertainity: Float,              # NOT NULL
+	workfunctionvms: Float,           # NOT NULL
+	startofenergyscalevms: Float,     # NOT NULL
+	scatter: Float,                   # NOT NULL
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String,          # uuid NOT NULL
+	acquisitiondate: String,
+	analysermode: String,
+	anodeemission: Float,             # NOT NULL
+	copperinputrange: String,
+	energyshift: Float,               # NOT NULL
+	goldinputrange: String,
+	largestordinatevaluevms: Float,   # NOT NULL
+	xrayenergy: Float,                # NOT NULL
+	numberofordinatevaluesvms: Float, # NOT NULL
+	parameter_a0: Float,              # NOT NULL
+	parameter_a1: Float,              # NOT NULL
+	parameter_a2: Float,              # NOT NULL
+	parameter_a3: Float,              # NOT NULL
+	parameter_a4: Float,              # NOT NULL
+	parameter_b1: Float,              # NOT NULL
+	parameter_b2: Float,              # NOT NULL
+	parameter_b3: Float,              # NOT NULL
+	parameter_b4: Float,              # NOT NULL
+	qmax: Float,                      # NOT NULL
+	qmin: Float,                      # NOT NULL
+	rbarag: Float,                    # NOT NULL
+	rbarau: Float,                    # NOT NULL
+	rbarcu: Float,                    # NOT NULL
+	silverinputrange: String,
+	smallestordinatevaluevms: Float,  # NOT NULL
+	vamasdata: String,
+	orderid: String,
+	status: Int,                      # NOT NULL
+	instrumentlineid: Int,            # FK on instrumentLine.id
+	anodevoltage: Float,              # NOT NULL
+	copperinputfile: String,
+	goldinputfile: String,
+	passenergy: Float,                # NOT NULL
+	silverinputfile: String,
+	sourcepower: Float,               # NOT NULL
+	maximumcalibratedenergy: Float,   # NOT NULL
+	minimumcalibratedenergy: Float,   # NOT NULL
+	referencematerials: String,
+
+        calCerts: [CalCert],              # how many?
+        catResults: [CatResult]           # 1 for each spectrumcategory (gold, silver, copper, transition function)
+       );
+
+typename InstrLine = (
+	id: Int,                           # NOT NULL, generated from sequence
+	instrumentid: Int,                 # FK on instrument.id
+	calibrationdate: DateTime,         # NOT NULL
+	versionnumber: Int,                # NOT NULL
+	createddate: DateTime,             # NOT NULL
+	createdby: String,                 # NOT NULL
+	modifieddate: DateTime,            # NOT NULL
+	modifiedby: String,                # NOT NULL
+	status: Int,                       # NOT NULL
+
+        calGroups: [CalGroup]              # 1 for each pass energy
+       );
+
+typename CalibrationEvent = (
+       id: Int,
+       orderid: String,                  
+       doc_id: Int,
+       timeslice: DateTime,
+       calibrationsetid: Int,
+       passenergy: Float,
+       analysermode: String,
+       anodeemission: Float,
+       uncertainty: Float,
+       calibrationgroupid: Int,
+       xmldocument: [XmlNode]
+       );
+
+typename CalibrationSet = (
+       id: Int,
+       instrumentid: Int,
+       versionnumber: Int,                  
+       calibrationdate: DateTime,
+       status: Int,
+       instrumentlineid: Int,
+       calibrationEvents: [CalibrationEvent]
+       );
+
+typename Instrument = ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	calibrator: String,
+	model: String,
+	companyid: Int,                   # NOT NULL
+	calibrationid: Int,               # NOT NULL
+	orderid: Float,                   # NOT NULL
+	anode: Int,                       # NOT NULL
+	anode_kv: Float,                  # NOT NULL
+	gamma: Float,                     # NOT NULL
+	xi: Float,                        # NOT NULL
+	serialnumber: String,
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String,          # uuid NOT NULL
+	owner: String,
+	status: Int,                      # NOT NULL
+        #
+        showdetails: Bool,
+        instrLines: [InstrLine],           # 1 for each calibration event
+        #
+        calibrationSets: [CalibrationSet] # 1 for each calibration event
+       );

@@ -1,0 +1,471 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides a web page to select the specific information that should be compared for the 
+# previously selected calibrations and then to display the results after the selections
+# - results that are not numeric are only displayed as a list  
+# - numeric results can also have stats calculated (not fully implemented)
+
+# webpage template
+open import MainXPSTemplate;
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+
+# XML specific
+open import XmlDocumentTables;
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import XmlXPS;
+open import SelectionXPS;          # functions to load selected calibrations
+open import ComparisonInfoXPS;     # functions to collect info about selected calibrations
+open import ComparisonFieldsXPS;   # functions to setup structures for field selection 
+open import ComparisonDataXPS;     # functions to collect data from selected fields
+
+# ================ TYPES =============================
+
+typename ModelDisplay = (modelName: String, 
+                         showdetails: Bool, 
+                         selected: Bool);
+
+typename InstrDisplay = (instrID: Int, 
+                         selected: Bool);
+
+typename Model = (instrs: [Instrument], 
+                  selection: [Select],  # calibrations selected
+                  info: [Info],         # data about calibrations selected
+                  fields: [DccField],   # data structure for field selection
+                  comp: [DccField],     # data structure for comparison data
+                  results: Bool, 
+                  showInfo: Bool);
+
+                  # types defined in ComparisonListXPS, ComparisonTableXPS, 
+                  # TypesXPS and SelectionXPS
+
+typename Message = [| NotCurrentlyUsed |
+                      PairwiseComparison: (Int, Int, String, String) |
+                      SelectSection: String | 
+                      TickBox: (String, String) |
+                      ReturnToCalibrationSelection |
+                      ReturnToDataSelection |
+                      PerformComparison |
+                      ViewDCC: (Int) |
+                      ViewChangeAnalysis: (Int) |
+                      # ChangeAnalysis: (Int) | 
+                      # add this for implementing comparison of two versions of a document
+                      ReturnToSelection |
+                      ClearSelection |
+                      ShowInfo |
+                      HideInfo |];
+
+#============= FUNCTIONS ==============================
+
+fun getCalibrationSetsAndCalibrationEvents(id) {
+  # >>>>>>>>
+  query nested {
+    for (cs <-- calibrationSet)
+      where (cs.instrumentid == id)
+       [(calibrationEvents = 
+           for (ce <-- calibrationEvent)
+             where (ce.calibrationsetid == cs.id)
+               [(xmldocument = [] | ce)]
+       | cs)]
+  }
+}
+
+fun getInstruments() {
+  # >>>>>>>>
+  var instrs = 
+    query nested { 
+      for (i <-- instrument) [i]
+    };
+  for (i <- instrs)
+    [(showdetails = true | 
+     (calibrationSets = getCalibrationSetsAndCalibrationEvents(i.id) | 
+     (instrLines = [] | i)))
+    ] 
+}
+
+fun updateFieldList(f, opt, fields) {
+  # --------
+  fun updateOption(opt, options) { 
+    # >>>>>>>>
+    for (x <- options)
+      [(x with status = 
+         if (x.opt_label == opt && x.status <> Disabled) 
+           if (x.status == Selected)
+             Unselected
+           else 
+             Selected
+         else 
+           x.status)]
+  }
+  # >>>>>>>>
+  for (x <- fields)
+    [(if (x.path == f)
+       (x with options = updateOption(opt, x.options))
+        #updateFieldItems(newValue(x.options), x) # should only happen once
+      else
+    x)]
+}
+
+#============= UPDT ===================================
+
+sig updt : (Message, Model) {}~> Model
+fun updt(msg, model) {
+  # >>>>>>>>
+  switch(msg) {
+    case PerformComparison -> 
+      (((model with results = true) 
+               with showInfo = false)
+               with comp = getDataFromDcc(model.fields,model.info))
+    case ReturnToSelection ->
+      redirect("/gotoOverview"); model
+    case ClearSelection ->
+      model
+    case SelectSection(s) ->
+      model
+    case ReturnToCalibrationSelection ->
+      redirect("/gotoOverview"); model
+    case ReturnToDataSelection ->
+      (model with results = false)
+    case TickBox(tag, box) ->
+      (model with fields = updateFieldList(tag, box, model.fields))
+    case ShowInfo ->
+      (model with showInfo = true)
+    case HideInfo ->
+      (model with showInfo = false)
+    case ViewDCC(doc_id) ->  
+      redirect("/inspectDCC?doc_id="^^intToString(doc_id));        
+      model
+    case ViewChangeAnalysis(doc_id) ->  
+      redirect("/gotoChangeAnalysis?doc_id="^^intToString(doc_id));        
+      model
+    case PairwiseComparison(doc_id1, doc_id2, d1, d2) ->
+      redirect("/gotoCompareVersions?doc_id1="^^intToString(doc_id1)^^"&doc_id2="^^intToString(doc_id2)^^"&d1="^^d1^^"&d2="^^d2);
+      model
+    case NotCurrentlyUsed ->
+      model
+
+    #case ChangeAnalysis(doc_id) ->
+    #  redirect("/gotoChangeAnalysis?doc_id="^^intToString(doc_id));
+    #  model
+  }
+}
+
+#============= VIEW ===================================
+
+sig view : (Model) ~> MvuHTML.HTML(Message)
+fun view(model) {
+  # --------
+
+  ### buttons and boxes
+  
+  fun pairwiseButton(doc_id1, doc_id2, d1, d2) {
+    # >>>>>>>>
+    availButton(PairwiseComparison(doc_id1, doc_id2, d1, d2), textNode("Pairwise Comparison"))
+  }
+
+  fun changeAnalysisButton(doc_id) {
+    # >>>>>>>>
+    availButton(ChangeAnalysis(doc_id), textNode("Change Analysis"))
+  }
+
+  var disabled_pairwiseButton = 
+    # >>>>>>>>
+    unavailButton(textNode("Pairwise Comparison"));
+
+  var disabled_changeAnalysisButton = 
+    # >>>>>>>>
+    unavailButton(textNode("Change Analysis"));
+
+  var returnButton =  
+    # >>>>>>>>
+    availButton(ReturnToSelection, textNode("Return to Calibration Selection"));
+
+  var performButtons = 
+    # >>>>>>>>
+    availButton(PerformComparison, textNode("Perform Comparison"));
+
+  var returnButtons = div(class("form-inline"),
+    # >>>>>>>>
+    availButton(ReturnToDataSelection, textNode("Return to Field Selection")) +*
+    availButton(ReturnToCalibrationSelection, textNode("Return to Calibration Selection"))
+  );
+
+  var showInfoButton =
+    # >>>>>>>>
+    showHideButton(ShowInfo, textNode("Show details"));
+
+  var hideInfoButton =
+    # >>>>>>>>
+    showHideButton(HideInfo, textNode("Hide details"));
+
+  fun checkBox(item, opt) {
+    # --------
+    fun findBox(l) {
+      # >>>>>>>>
+      switch(l) {
+        case []  -> error("not found")
+        case x::xs -> if (x.opt_label == opt) x else findBox(xs)
+      }
+    }
+    # >>>>>>>>
+    var b = findBox(item.options);
+    var statusAttr =
+      switch(b.status) {
+        case Selected   -> attr("checked", "checked")
+        case Unselected -> a0
+        case Disabled   -> attr("disabled", "disabled")
+      };
+    div(class("form-check-inline"),      
+      input(class("form-check-input-lg") +@ type("checkbox") +@ 
+        statusAttr +@ onClick(fun() { TickBox(item.path, opt) }), h0)
+    )
+  }
+
+  fun dccButtons (doc_id,duplicate) {
+    # >>>>>>>>
+    div(class("form-inline"),
+      if (doc_id == -1)
+        h0
+      else if (duplicate)
+        availButton(ViewDCC(doc_id), textNode("DCC")) +*
+        availButton(ViewChangeAnalysis(doc_id), textNode("Change Analysis"))
+      else
+        availButton(ViewDCC(doc_id), textNode("DCC"))
+    )
+  }
+
+  ### table containing information about calibrations selected
+
+  fun renderInfoRows (m) {
+    # --------
+    fun renderInfoRow(x) {
+      # >>>>>>> 
+      tr(a0,
+        td(style("width: 300px"), unescapedTextNode(x.inf_label)) +*
+        td(style("width: 150px"), textNode(x.serialnumber)) +*
+        td(style("width: 150px"), textNode(x.model)) +*
+        td(style("width: 100px"), textNode(floatToString(x.passenergy))) +*
+        td(style("width: 150px"), textNode(dateTimePrint(x.calibrationdate))) +*
+        td(style("width: 60px") +@ attr("align","center"), 
+          textNode(intToString(x.versionnumber))) +*
+        td(style("width: 80px") +@ attr("align","center"), 
+          textNode(intToString(x.companyid))) +*
+        td(style("width: 150px"), textNode(x.orderid))
+      ) 
+    }
+    # >>>>>>> 
+    switch (m) {
+      case []    -> h0
+      case x::xs -> renderInfoRow(x) +* renderInfoRows(xs)
+    }   
+  }
+
+  var infoTable = {
+    # >>>>>>>> 
+    var tableContent = 
+      table_(class("table table-sm"),
+        tbody(a0, renderInfoRows(model.info))
+       ); 
+    
+    table_(class("table table-sm table-bordered align-middle contains-scrolldown"),
+      tbody(a0,
+        tr(a0,
+          td(style("width: 300px"), textNode("Label")) +* 
+          td(style("width: 150px"), textNode("Serial number")) +*
+          td(style("width: 150px"), textNode("Model")) +*
+          td(style("width: 100px"), textNode("Pass energy")) +*
+          td(style("width: 150px"), textNode("Calibrated")) +*
+          td(style("width: 60px"), textNode("Version")) +*
+          td(style("width: 80px"), textNode("Company")) +*
+          td(style("width: 150px"), textNode("Order")) 
+        ) 
+        +* tr(a0, td(style("colspan: 5"), tableContent)) 
+      )
+    )       
+  };
+
+  ### table for selection of fields for comparison
+
+  fun renderFieldRow(x) {
+    # >>>>>>>>
+    var s = "&nbsp;&nbsp;"; 
+    tr(a0,
+      td(a0, textNode(x.descr)) +*
+      td(attr("align", "center"), checkBox(x, "List")) +*
+      td(attr("align", "center"), checkBox(x, "Stats")) +*
+      td(attr("align", "center"), checkBox(x, "Stats_PE")) +*
+      td(a0, textNode(x.fld_label))
+    )
+  }
+
+  fun renderFieldRows (m) {
+    # >>>>>>>>
+    switch (m) {
+      case []    -> 
+        h0
+      case x::xs -> 
+        renderFieldRow(x) +*
+          renderFieldRows(xs)
+    }   
+  }
+
+  var fieldsTable = {
+    # --------
+    var hrows = 
+      # >>>>>>>>
+      tr(a0, 
+        td(style("width: 20%"), textNode("Field for comparison")) +*
+        td(style("width: 10%") +@ attr("align", "center"), textNode("List output")) +*
+        td(style("width: 10%") +@ attr("align", "center"), textNode("Stats output")) +*
+        td(style("width: 10%") +@ attr("align", "center"), textNode("Stats by PE")) +*
+        td(style("width: 10px") +@ attr("align", "center"), textNode("XML Path"))
+    );
+    # >>>>>>>>
+    var rows = renderFieldRows(model.fields); 
+    
+    h5(class("card-title"), h0) +* 
+      table_(class("table table-bordered table-sm"),
+        tbody(a0, hrows +* rows))
+  };
+
+  ### tables to display results of selected fields
+
+  fun makeResultsTable (c) {
+    # --------
+    fun makeResultRow (l) {
+      # >>>>>>>>
+      tr(a0,
+        td(a0,textNode(l.value)) +*
+        td(a0,textNode(l.cal_label^^(if (l.duplicate) "****" else ""))) +*
+        td(a0,dccButtons(l.doc_id,l.duplicate))
+      )
+    }
+    # >>>>>>>>
+    var footnote = 
+      if (any(fun (x) { x.duplicate },c.dataList))
+        unescapedTextNode("<em>**** This value has been changed. See Change Analysis for more details.</em>")
+      else
+        h0;  
+    var resultTable = 
+      table_(class("table table-bordered table-sm"),
+        tbody(a0, concatMap(makeResultRow,c.dataList)) +* footnote);
+    div(class("container-fluid"), h5(a0, textNode(c.descr)) +* resultTable)
+  }
+
+  var makeResultsTables = 
+    # >>>>>>>>
+    concatMap(makeResultsTable,map(decideContent,model.comp));
+  
+  # >>>>>>>>
+  var n = length(model.info); # the value of n is the number of calibrations selected and
+                              # determines which buttons will be active 
+                              # and what error messages will be displayed
+
+  var one_doc_id =            # only one document selected, not implemented
+    if (length(dedup(for (x <- model.info) [x.doc_id])) == 1)
+      true
+    else false;
+
+  # current implementation does not allow two different timeslices of the same document to be chosen for comparison
+  # current implementation uses an asterisk to flag multiple version of a DCC field
+
+  ### page generation
+
+  var infoTableWithButton = 
+    # >>>>>>>>
+    if (model.showInfo)
+      div(class("form-group"),
+        unescapedTextNode("<br>There are "^^intToString(n)^^" calibrations selected for comparison.") +* 
+          hideInfoButton +* infoTable +* unescapedTextNode("<br><br>"))
+    else 
+      div(class("form-inline"),
+        unescapedTextNode("<br>There are "^^intToString(n)^^" calibrations selected for comparison.") +* 
+          showInfoButton +* unescapedTextNode("<br><br>"));
+
+  if (n == 0)
+    unescapedTextNode("<br> No calibrations have been selected: please return to selection") +* returnButton
+  else if (n == 1)
+    unescapedTextNode("<br> Only one calibration has been selected: please return to selection") +* returnButton
+  else {
+    var globalButtons = 
+      # >>>>>>>>
+      if (n == 2 && one_doc_id)
+         div(class("form-inline"),
+           performButtons +* returnButton +* 
+           pairwiseButton(hd(model.info).doc_id,last(model.info).doc_id,
+             show(hd(model.info).timeslice),show(last(model.info).timeslice)) # +*
+           # changeAnalysisButton(hd(model.info).doc_id)
+         )
+      else if (n == 2)
+        div(class("form-inline"),
+          performButtons +* returnButton +* 
+          pairwiseButton(hd(model.info).doc_id,last(model.info).doc_id,
+            show(hd(model.info).timeslice),show(last(model.info).timeslice)) # +*
+          # disabled_changeAnalysisButton
+        )
+      else if (one_doc_id)
+        div(class("form-inline"), 
+          performButtons +* returnButton +* 
+          disabled_pairwiseButton # +*
+          # changeAnalysisButton(hd(model.info).doc_id) 
+        )
+      else 
+        div(class("form-inline"),
+          performButtons +* returnButton +* 
+          disabled_pairwiseButton # +* 
+          # disabled_changeAnalysisButton
+        );
+
+    if (not(model.results))
+      div(class("container-fluid"), h4(a0, textNode("Comparison") +* globalButtons)  
+        +* infoTableWithButton +* fieldsTable +* globalButtons)
+    else {
+      div(class("container-fluid"), h4(a0, textNode("Comparison results") +* returnButtons)  
+        +* infoTableWithButton +* makeResultsTables +* returnButtons)
+    }
+  }
+}
+
+#========================= MAIN =================================
+
+fun mainPage() {
+  # >>>>>>>>
+  var id = switch(lookup("instr_id", environment())) {
+    case Just(id)  -> if (isInt(id)) stringToInt(id) else -1
+    case Nothing   -> -1
+  };
+
+  var instrs = (getInstruments());
+  var (selection,showInfo) =
+    if (id == -1)  # arrived at page from global calibrations overview button
+      # Find out what has been selected 
+      (findSelectedCalibrations(instrs),false)
+    else           # arrived at page from instrument calibration overview button
+      # Find out what can be selected for the instrument
+      (setupSelectCalibrations(id, instrs),true); 
+  
+  runSimple("placeholder", 
+            (instrs = instrs, 
+             selection = selection, 
+             results = false,
+             showInfo = showInfo,
+             info = collectCalInfo(selection, instrs), 
+             fields = listFieldsAD() ++ listFieldsMR(), 
+             comp = []),
+             view, updt);
+  template()
+}

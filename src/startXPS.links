@@ -1,0 +1,49 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# startXPS.links
+#
+# main program for the XPS DCC curator
+#
+# > links --config=config.0.9.8 src/startXPS.links
+#
+# this calls main() which sets up routing and then loads the instruments page
+
+
+# XPS application modules 
+
+open import InstrumentsPageXPS;
+open import CalibrationsPageXPS;
+open import GenerateDccXPS;
+open import OverviewPageXPS;
+open import ComparisonPageXPS;
+open import CompareVersionsPageXPS;
+open import ChangeAnalysisPageXPS;
+open import InspectDccPageXPS;
+
+fun main() {
+
+  # instrument page
+  addRoute("/", fun(_) { InstrumentsPageXPS.mainPage() });
+
+  # individual calibrations
+  addRoute("/gotoCalibrations", fun(_) { CalibrationsPageXPS.mainPage() });
+
+  addRoute("/inspectDCC", fun(_) { InspectDccPageXPS.mainPage(show(now())) }); 
+  addRoute("/gotoCompareVersions", fun(_) { CompareVersionsPageXPS.mainPage() });
+  addRoute("/gotoChangeAnalysis", fun(_) { ChangeAnalysisPageXPS.mainPage() });
+
+  # all calibrations   
+  addRoute("/gotoOverview", fun(_) { OverviewPageXPS.mainPage() });
+  addRoute("/gotoComparison", fun(_) { ComparisonPageXPS.mainPage() });
+  
+  addStaticRoute("/css", "css", [("css", "text/css")]);
+  addStaticRoute("/js", "js", [("js", "text/javascript")]);
+  addStaticRoute("/images", "images", [("css", "image/png")]);
+
+  serveWebsockets();
+  servePages()
+}
+
+main()

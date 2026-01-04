@@ -1,0 +1,396 @@
+# original author: Vashti Galpin (Vashti.Galpin@ed.ac.uk)
+# created: 2025-01-31
+# last updated: 2025-02-09
+#
+# module of mainXPS.links
+#
+# functions to generate, retrieve and store selection information for the web
+# page that provides overview of all calibrations
+#
+# generates a selection based on the seqPE_list variable below
+# this variable is where to make changes if the different types
+# of calibration were to change
+#
+# pe/PE abbreviates pass energy
+
+# general
+open import StringUtils;
+
+# application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import GeneralXPS;
+
+
+# ================ TYPES
+
+# display data structures, for keeping track of what models/instruments have been selected
+
+typename ModelDisplay = (modelName: String, 
+                         showdetails: Bool, 
+                         selected: Bool);
+
+typename InstrDisplay = (instrID: Int, 
+                         selected: Bool);
+
+# calibrations data structure, to keep track of which calibrations have been selected
+# each calibration set (Select) consists of a number of calibration events (SeqPEs), 
+# uniquely identified by sequence number and pass energy
+
+typename SeqPE = (seq: Int, 
+                  pe: Float, 
+                  selected: Bool, 
+                  available: Bool, 
+                  label: String);
+ 
+typename Select = (cs_id:Int, 
+                   seqPEs: [SeqPE], 
+                   all_selected: Bool);
+
+# ================ VARIABLES
+
+# this is used to generate the selection data structure as well as column labels
+# it is based on what is know about the seven different calibrations that are done
+# for an instrument
+# 
+# (adding or changing pe values appropriately with respect to the underlying 
+# calibration data should work, but has not been tested)
+
+var seqPE_pairs = [(seq=1,pe=80.0),
+                   (seq=2,pe=40.0),
+                   (seq=3,pe=20.0),
+                   (seq=4,pe=10.0),
+                   (seq=5,pe=160.0),
+                   (seq=6,pe=160.0),
+                   (seq=7,pe=160.0)];
+var seqPE_list = 
+  for (x <- seqPE_pairs)
+    [(label = intToString(x.seq) ^^ ":" ^^ intToString(floatToInt(x.pe)) ^^ "eV"
+       | x )];
+
+#============ FUNCTIONS TO SETTING UP AND SAVING SELECTION DATASTRUCTURE
+
+# This group of functions set up the data structure that records
+# which calibrations has been selected (on screen by selecting the tickbox).
+# Calibrations which are not available are greyed out.
+#
+# This information is saved to a database table "selected"
+# which records for each calibration, for each sequence number
+# and for each PE level whether the calibration was selected.
+# The save action occurs before changing to the comparison page.
+# 
+# This information is used for the calibration comparison as
+# well as for returning to this screen, so that the current selection 
+# can be displayed.
+
+fun findAvailableCalibrations (instrs) {
+  # this function takes all instruments, considers each instrument's
+  # calibration set and creates a data structure of what calibrations
+  # are available
+  # -------- 
+  fun checkAvailable (calEvents) {
+    # if a calibration is available for a particular sequence number and PE, 
+    # sets the available flag to true. The selected flag is set to false and 
+    # this is not updated until when the table "selection" is read later.
+    # --------    
+    fun check (seq,v) {
+      # this function check where a clibration is availble for a particular
+      # sequence number and PE value
+      # --------          
+      var ce_list = 
+        for (ce <- calEvents)
+          where (ce.passenergy==v && getSeq(ce.orderid)==seq )
+            [(ce)];
+      if (ce_list == [] )
+        false
+      else
+        true
+    }
+    # >>>>>>>>
+    for (pel <- seqPE_list)
+      [(label=pel.label, seq = pel.seq, pe = pel.pe, selected=false,
+        available = check(pel.seq,pel.pe))]
+  }
+  # >>>>>>>>
+  for (x <- instrs)
+    for (y <- x.calibrationSets)
+      [(cs_id = y.id, 
+        seqPEs = checkAvailable(y.calibrationEvents),
+        all_selected = false)] 
+}
+
+fun findSelectedCalibrations (instrs) {
+    # this function reads the table "selected" repeatedly, and for each 
+    # sequence number and pass energy pair updates whether they should be 
+    # indicated as selected
+    # --------
+    var selected_cs_ids =  
+      dedup(
+        query nested { for (y <-- selected) [y.cs_id] }
+      );
+
+    fun checkSelect (s) {               
+      # >>>>>>>>
+      if (elem(s.cs_id,selected_cs_ids)) # if the existing cs_id is stored in selected
+        query {                          # update seqPEs with information about which
+          for (sp <- s.seqPEs)           # have been selected in the UI
+            for (y <-- selected)
+              where (s.cs_id == y.cs_id &&
+                     sp.seq == y.seq && sp.pe == y.pe)
+                [(label = sp.label, seq = sp.seq, pe = sp.pe,
+                  available = sp.available,
+                  selected = y.selected)]
+                #[(sp with selected = y.selected)] # this should work but it doesn't!
+        }
+      else s.seqPEs # cs_id does not appear in selected, so return seqPEs without modification
+    }
+    # >>>>>>>>
+    for (x <- findAvailableCalibrations(instrs))
+      [(x with seqPEs = checkSelect(x))]
+    # check for all selected!
+    # this currently misses new calibrations that have been added
+  }
+
+fun setupSelectCalibrations (id,instrs) {
+  # this function is called to set up the selection data structure
+  # with all calibrations of a given instrument selected and no others
+  # --------
+  fun updateSelect (s) { 
+    # >>>>>>>>           
+    for (sp <- s.seqPEs)            # only select if available
+      [( sp with selected = true && sp.available )]
+  }
+  # >>>>>>>>
+  var cs_list =                     # collect the calibration set ids 
+    for (i <- instrs)               # for the chosen instrument
+      where (i.id == id)
+        for (cs <- i.calibrationSets)
+          [(cs.id)];
+  for (x <- findAvailableCalibrations(instrs)) # provides the selection datastructure
+    [ if (elem(x.cs_id,cs_list))
+        (x with seqPEs = updateSelect(x))      # only modified if for chosen instrument
+      else (x)]
+}
+
+
+# write selection to database table "selected"
+# after removing existing tuples from "selected"
+
+fun writeSelected (s) server {
+  # >>>>>>>>
+  delete (x <-- selected) where (true);
+  for (x <- s)
+    for (y <- x.seqPEs)
+      [insert selected values
+        [(cs_id = x.cs_id,
+          seq = y.seq,
+          pe = y.pe,
+          selected = y.selected
+       )]]    
+}
+
+#== clear all selections made
+
+fun removeSelections(s) {
+  # >>>>>>>>      
+  for (x <- s)
+    [(cs_id = x.cs_id, all_selected = false,
+      seqPEs = for (y <- x.seqPEs)
+        [( y with selected=false )] )]            
+}
+
+fun unselectAllInstrAndModel(model) {
+  # >>>>>>>>
+  var mid = 
+    for (i <- model.instrDisplay)                              
+      [(i with selected = false)];  
+  var mmd = 
+    for (i <- model.modelDisplay)                              
+      [(i with selected = false)];
+  (((model 
+    with instrDisplay = mid) 
+      with modelDisplay = mmd)
+        with selection = removeSelections(model.selection))                                                 
+}
+
+# ================ FUNCTIONS FOR DISPLAY MANIPULATION
+
+fun addSelect (s,cs_list) {
+  # >>>>>>>>
+  if (not(elem(s.cs_id,cs_list)))
+    s.seqPEs
+  else 
+    for (sp <- s.seqPEs)
+      [(sp with selected = if (sp.available) true else false)]
+}
+
+fun removeSelect (s,cs_list) {
+  # >>>>>>>>
+  if (not(elem(s.cs_id,cs_list)))
+    s.seqPEs
+  else 
+    for (sp <- s.seqPEs)
+      [(sp with selected = false)]
+}
+
+# ==== model selection
+
+fun modelSelected (m,l) {
+  # >>>>>>>>
+  switch (l) {
+    case []    -> error("Model not found")
+    case x::xs -> if (x.modelName == m)  x.selected
+                  else                   modelSelected(m,xs)
+  }
+}
+
+fun updateModelShowDetails(modelDisplay, name) {
+  # >>>>>>>>
+  for (x <- modelDisplay)
+     if (x.modelName == name)
+       [(x with showdetails=not(x.showdetails))]
+     else
+       [x]
+}
+
+fun toggleModelDisplay (m)(item) {
+  # >>>>>>>>
+  if (item.modelName == m)
+    (item with selected=not(item.selected))
+  else item
+}
+
+fun addModelSelection (m,model) {
+  # >>>>>>>>
+  var cs_list = 
+    for (i <- model.instrs)
+      where (i.model == m)     
+        for (cs <- i.calibrationSets) 
+          [cs.id];     
+  for (s <- model.selection)                              
+    [(s with seqPEs = addSelect(s,cs_list))]
+}
+
+fun removeModelSelection (m,model) {
+  # >>>>>>>>
+  var cs_list = 
+    for (i <- model.instrs)
+      where (i.model == m)     
+        for (cs <- i.calibrationSets) 
+          [cs.id];     
+  for (s <- model.selection)                              
+    [(s with seqPEs = removeSelect(s,cs_list))]
+}
+
+# ==== instrument selection
+
+fun instrSelected (i,l) {
+  # >>>>>>>>
+  switch (l) {
+    case []    -> error("Instrument not found")
+    case x::xs -> if (x.instrID == i)  x.selected
+                  else                 instrSelected(i,xs)
+  }
+}
+
+fun updateInstrShowDetails(instrs, id) {
+  # >>>>>>>>
+  for (x <- instrs)
+     if (x.id == id)
+       [(x with showdetails=not(x.showdetails))]
+     else
+       [x]
+} 
+
+fun toggleInstrDisplay (id)(item) {
+  # >>>>>>>>
+  if (item.instrID == id)
+    (item with selected=not(item.selected))
+  else item
+}
+
+fun selectInstrButtons(m,model) {
+  # >>>>>>>>
+  var i_list = 
+    for (i <- model.instrs)
+      where (i.model == m) 
+        [i.id];
+  for (i <- model.instrDisplay)                              
+    [(i with selected = if (elem(i.instrID,i_list)) false else i.selected)]                         
+}
+
+fun unselectInstrButtons(m,model) {
+  # >>>>>>>>
+  var i_list = 
+    for (i <- model.instrs)
+      where (i.model == m) 
+        [i.id];
+  for (i <- model.instrDisplay)                              
+    [(i with selected = if (elem(i.instrID,i_list)) true else i.selected)]                    
+}
+
+fun addInstrSelection (id,model) {
+  # >>>>>>>>
+  var cs_list = 
+    for (i <- model.instrs)
+      where (i.id == id)     
+        for (cs <- i.calibrationSets) 
+          [cs.id];     
+  for (s <- model.selection)                              
+    [(s with seqPEs = addSelect(s,cs_list))]
+}
+
+fun removeInstrSelection (id,model) {
+  # >>>>>>>>
+  var cs_list = 
+    for (i <- model.instrs)
+      where (i.id == id)     
+        for (cs <- i.calibrationSets) 
+          [cs.id];     
+  for (s <- model.selection)                              
+     [(s with seqPEs = removeSelect(s,cs_list))]
+}
+
+
+# ==== calibration selection
+
+fun toggleAll (cs_id)(sel) {
+  # --------
+  fun set_sel(bval) {
+    # >>>>>>>>
+    ((sel with all_selected = bval)
+          with seqPEs = map(fun(x){(x with selected=bval)},sel.seqPEs))
+  }
+  # >>>>>>>>
+  if (cs_id <> sel.cs_id)     # not the correct calibration set
+    sel                       #   do nothing
+  else if (sel.all_selected)  # all was selected
+    set_sel(false)            #   so change everthing to not selected
+  else                        # all wasn't selected
+    set_sel(true)             #   so change everthing to selected
+}
+
+fun updateAllStatus (sel) {
+  # >>>>>>>>
+  if (and(map(fun (x) {x.selected || not(x.available)},sel.seqPEs)))
+    (sel with all_selected = true)
+  else
+    (sel with all_selected = false)
+}
+
+fun toggleSelection (cs_id,seq,pe)(sel) {
+  # --------
+  fun toggleTickBox(seq,pe)(sp) {
+    # >>>>>>>>
+    if (sp.seq==seq && sp.pe==pe)
+      (sp with selected = not(sp.selected))
+    else sp
+  }
+  # >>>>>>>>
+  if (sel.cs_id==cs_id)
+    updateAllStatus((sel with seqPEs = map(toggleTickBox(seq,pe),sel.seqPEs)))
+    # note: not possible to do "((sel with seqPEs=...) with all_selected = ...)"
+    # where all_selected relies on the new version of seqPEs because there is
+    # no way to refer it, using sel.seqPEs gives the original version
+  else sel  
+}

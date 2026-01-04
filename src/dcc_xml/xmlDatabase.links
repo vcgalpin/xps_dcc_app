@@ -1,0 +1,45 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+# derived from https://github.com/vcgalpin/dcc-xml-temporal
+
+## modified from original xmlDatabase to allow for multiple table ids
+## to be used with xmlDocumentTables 
+
+# XML specific
+open import NameOfXMLDB;
+open import XmlDatabaseFunctions;
+
+# the *document* table records info about XML documents
+# - identified by a unique document id
+# - plus a description of the document
+# - and the string that is appended to the XML table names
+#   - this determines which tables store the document
+
+var document = table "document"
+      with (doc_id: Int,
+            doc_info: String, 
+            table_id : String)
+    where doc_id readonly
+  from db;
+
+
+var tables = 
+  (table_id="vcg")::
+  query mixing { dedup(
+    for (x <-- document) [(table_id=x.table_id)]
+  )};  
+
+# dictionary structure for table variables
+# [(String, (attr:TemporalTable(...), node:TemporalTable(...), path:TemporalTable(...)) 
+#  )]
+
+var table_id_assoc = 
+  for (x <- tables)
+    [(x.table_id,
+      (node = createNodeTable(x.table_id),
+       attr = createAttrTable(x.table_id),
+       path = createPathTable(x.table_id))
+    )]; 
+

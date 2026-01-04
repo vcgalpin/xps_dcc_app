@@ -1,0 +1,107 @@
+body {
+  padding-top: 5rem;
+  margin-left: 26px;
+}
+
+.main-container {
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.navbar-brand {
+  margin-left: 50px;
+  font-size: 24px;
+}
+
+.navbar-expand-md {
+  padding: 2px;
+  background-color: #E7E4EA;
+}
+
+tr {
+  vertical-align: center;
+}
+
+.td-alignright {
+   text-align: right;
+}
+
+td {
+  height: 40px;
+  vertical-align: center;
+  margin-left: 8px;
+}
+
+/* Buttons */
+
+.btn-blue {
+  background-color: #3882D4; /* Blue */
+  border: 2px solid #3882D4; /* Blue */
+  color: white;
+  padding: 4px 10px;
+  text-align: center;
+  text-decoration: none;  
+  display: inline-block;
+  font-size: 12px;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.btn-blue:hover {
+  background-color: white;
+  border: 2px solid #3882D4; /* Blue */
+  color: #3882D4;
+}
+
+.btn-blue:disabled {
+  background-color: #E8E8E8;
+  border: 2px solid #E8E8E8; /* Blue */
+  color: #585858;
+}
+
+.btn-notimpl {
+  background-color: #3882D4; /* Blue */
+  border: 2px solid #3882D4; /* Blue */
+  color: white;
+  padding: 4px 10px;
+  text-align: center;
+  text-decoration: none;  
+  display: inline-block;
+  font-size: 12px;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.btn-notimpl:disabled {
+  background-color: ##3882D4;
+  border: 2px solid ##3882D4; 
+  color: white;
+}
+
+.btn-openclose {
+  background-color: white
+  color: black;
+  padding: 0px 4px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+}
+
+/*
+
+.btn:hover {
+  background-color: #3882D4; /* Blue */
+  border: 2px solid #3882D4; /* Blue */
+  color: white;
+}
+
+.btn:focus {
+  background-color: white;
+  color: #3882D4; /* Blue */
+  border: 2px solid #3882D4; /* Blue */
+  outline: none;
+  box-shadow: none;
+}
+
+*/

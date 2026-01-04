@@ -1,0 +1,347 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides a web page to view all calibration for a specific calibration event for a specific
+# instrument with links to the DCC certificate for each calibration in the calibration event 
+
+# webpage template
+open import MainXPSTemplate;
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+open import GeneralUtils;
+
+# XPS application specific
+open import TypesXPS;
+open import DatabaseXPS;
+open import GenerateDccXPS;
+
+
+open import XmlDatabase;
+open import XmlDocumentTables;
+open import XmlXPS;
+
+# ================ TYPES =============================
+
+typename Model = (instr: Instrument);
+
+typename Message = [| NotCurrentlyUsed | 
+                      ViewDCC: (Int,Int) |];
+
+#============= FUNCTIONS ==============================
+
+fun getInstrumentLine (il_id) {
+  # >>>>>>>>
+  query nested {
+    for (il <-- instrumentLine)
+      where (il_id == il.id)
+        [(calGroups = for (cg <-- calibrationGroup)
+          where (il.id == cg.instrumentlineid)
+            [(calCerts = []
+            | (catResults = []    
+            | cg))]
+            | il)]
+  }
+}
+
+fun getCalibrationSetFromCSID (cs_id) {
+  # >>>>>>>>
+  query nested {
+    for (cs <-- calibrationSet)
+      where (cs_id == cs.id)
+        [( calibrationEvents = for (ce <-- calibrationEvent)
+          where (cs.id == ce.calibrationsetid)
+            [(xmldocument = []
+              | ce) ]
+              | cs)]
+  }
+}
+
+fun getCalibrationSetFromILID (il_id) {
+  # >>>>>>>>
+  query nested {
+    for (cs <-- calibrationSet)
+      where (il_id == cs.instrumentlineid)
+        [( calibrationEvents = for (ce <-- calibrationEvent)
+          where (cs.id == ce.calibrationsetid)
+            [(xmldocument = []
+              | ce)]
+              | cs)]
+  }
+}
+
+fun getInstrument (ilcs_id) {
+  # --------
+  # currently an instrument has references from either instrumentLine or 
+  # calibrationSet but not both
+
+  var instr_list = 
+    # >>>>>>>>
+    query nested { 
+      for (il <-- instrumentLine)
+        for (i <-- instrument)
+          where (i.id == il.instrumentid && ilcs_id == il.id)
+            [( instrLines = getInstrumentLine(ilcs_id) |
+              ( calibrationSets = getCalibrationSetFromILID(ilcs_id) |
+                i ))]
+    } ++
+    query nested { 
+      for (cs <-- calibrationSet) 
+        for (i <-- instrument)
+          where (i.id == cs.instrumentid && ilcs_id == cs.id)
+            [( instrLines = [] |
+             ( calibrationSets = getCalibrationSetFromCSID(ilcs_id) |
+               i ))]
+    };
+   
+  if (checkSingletonList(instr_list))
+    ( showdetails=false | hd(instr_list))
+  else 
+    error("One instrument expected")
+}
+
+fun addDocID (i) {
+  # --------
+
+  fun getDocID(cg_id) {
+    # >>>>>>>>
+    var ce_list = for (ce <- hd(i.calibrationSets).calibrationEvents) 
+                    where (ce.calibrationgroupid == cg_id) [ce.doc_id];
+    if (ce_list==[])
+      -1
+    else if (checkSingletonList(ce_list))
+      hd(ce_list)
+    else
+      error ("Only one item expected in list")
+    #hd(ce_list)
+  }
+  # >>>>>>>>
+  if (i.calibrationSets == [])
+    # iterate over all calGroups and assign -1 as calibrationeventid
+    for (cg <- hd(i.instrLines).calGroups)
+       [( doc_id = -1 | cg)]
+  else
+    # iterate over all calGroups, looking for calibrationeventids
+    for (cg <- hd(i.instrLines).calGroups) 
+      [( doc_id = getDocID(cg.id)
+       | cg)]
+}
+
+#============= UPDT ===================================
+
+sig updt : (Message, Model) {}~> Model
+fun updt(msg, model) {
+  # >>>>>>>>
+  switch(msg) {
+    case ViewDCC((doc_id,cg_id)) ->  
+      if (doc_id <> -1)                   # document already exists
+        redirect("/inspectDCC?doc_id="^^intToString(doc_id))        
+      else {
+        var doc_id = insertDCC(cg_id); 
+        redirect("/inspectDCC?doc_id="^^intToString(doc_id))
+      };
+      model
+    case NotCurrentlyUsed -> 
+      model
+  }    
+}
+
+#============= VIEW ===================================
+
+sig view : (Model) ~> MvuHTML.HTML(Message)
+
+fun view(model) {
+  # --------
+
+  fun groupButtons (ids) {
+    # >>>>>>>>
+    var dccButton = 
+      if (ids.1 <> -1)
+        availButton(ViewDCC(ids), textNode("View Certificate (DCC)"))
+      else
+        availButton(ViewDCC(ids), textNode("Generate and View Certificate (DCC)"));
+
+    div(class("form-inline"),
+      unimplButton(textNode("View Graph")) +* 
+      unimplButton(textNode("View Parameters")) +* 
+      unimplButton(textNode("View Certificate (PDF)")) +*
+      dccButton
+    )
+  }
+
+  var globalButtons = 
+    # >>>>>>>>
+    div(class("form-inline"),
+      availButton(NotCurrentlyUsed, textNode("Calibration Overview"))
+    );
+    
+  var calTableHeaders = {
+    # >>>>>>>>
+    tr(a0, 
+      td(a0, textNode("Reference")) +*
+      td(a0, textNode("Pass energy")) +*
+      td(a0, textNode("Analyser mode")) +*
+      td(a0, textNode("Anode emission")) +*
+      td(a0, textNode("Uncertainty")) +*
+      td(a0, textNode("Actions"))
+    )
+  };
+
+  fun renderCalEvents (l) {   
+    # --------
+    fun renderCalEvent(x) {
+      # >>>>>>>
+      tr(a0,
+        td(style("width: 10%"), textNode(x.orderid)) +*
+        td(style("width: 8%"), textNode(floatToString(x.passenergy)^^" eV")) +*
+        td(style("width: 8%"), textNode(x.analysermode)) +*
+        td(style("width: 9%"), textNode(floatToString(x.anodeemission)^^" mA")) +*
+        td(style("width: 8%"), textNode(floatToString(x.uncertainty)^^" %")) +*
+        td(style("width: 650px"), groupButtons((x.doc_id,-1)))
+      )
+    }
+    # >>>>>>>>
+    switch (l) {
+      case []    -> h0
+      case x::xs -> renderCalEvent(x) +* renderCalEvents(xs)
+    }   
+  }
+
+  fun sortCals (c) {
+    # >>>>>>>>
+    for (x <- c)
+      orderby (x.orderid)
+        [x]
+  }
+
+
+  fun cs_calTable (c) {     
+    # >>>>>>>>
+    table_(class("table table-sm table-bordered align-middle"),
+      tbody(a0,
+      calTableHeaders +* renderCalEvents(sortCals(c))
+      )    
+    )    
+  }
+
+  fun renderCalGroups (l) {   
+    # --------
+    fun renderCalGroup(x) { 
+      # >>>>>>>
+      tr(a0,
+        td(style("width: 10%"), textNode(x.orderid)) +*
+        td(style("width: 8%"), textNode(floatToString(x.passenergy)^^" eV")) +*
+        td(style("width: 8%"), textNode(x.analysermode)) +*
+        td(style("width: 9%"), textNode(strsub(floatToString(x.anodeemission),0,4)^^" mA")) +*
+        td(style("width: 8%"), textNode(strsub(floatToString(x.uncertainity),0,4)^^" %")) +*
+        td(style("width: 650px"), groupButtons((x.doc_id,x.id)))
+      )
+    }
+    switch (l) {
+      case []    -> h0
+      case x::xs -> renderCalGroup(x) +* renderCalGroups(xs)
+    }   
+  }
+
+  fun il_calTable (c) {     
+    # >>>>>>>>
+    table_(class("table table-sm table-bordered align-middle"),
+      tbody(a0,
+        calTableHeaders +* renderCalGroups(sortCals(c))
+      )    
+    )    
+  }
+
+  fun detTable (d) {
+    # >>>>>>>>
+    table_(class("table table-sm table-bordered align-middle w-75"),
+      tbody(a0,
+        tr(a0, 
+          td(a0, textNode("Recalibration/Version number")) +*
+          td(a0, textNode(intToString(d.versionnumber)))
+        ) +*
+        tr(a0, 
+          td(a0, textNode("Calibration completed on")) +*
+          td(a0, textNode(datePrint(d.calibrationdate)))
+        ) +*
+        tr(a0, 
+          td(a0, textNode("Gamma angle")) +*
+          td(a0, unescapedTextNode(floatToString(model.instr.gamma)^^"&nbsp;&deg;"))
+        ) +*
+        tr(a0, 
+           td(a0, textNode("Xi angle")) +*
+           td(a0, unescapedTextNode(floatToString(model.instr.xi)^^"&nbsp;&deg;"))
+        ) +*
+        tr(a0, 
+          td(a0, textNode("Anode material")) +*
+          td(a0, textNode(intToString(model.instr.anode)))  # need mapping from integers to materials
+        ) +*
+        tr(a0, 
+          td(a0, textNode("Anode voltage")) +*
+          td(a0, unescapedTextNode(floatToString(model.instr.anode_kv)^^"&nbsp;kV"))
+        )
+      )
+    )        
+  }
+
+  var infoTable = {
+    # >>>>>>>>
+    table_(class("table table-sm table-bordered align-middle w-50"),
+      tbody(a0,
+        tr(a0, 
+          td(a0, textNode("Description")) +*
+          td(a0, textNode(model.instr.model))
+          ) +*
+        tr(a0, 
+          td(a0, textNode("Identification")) +*
+          td(a0, textNode(model.instr.serialnumber))
+        ) +*
+        tr(a0, 
+          td(a0, textNode("Reference")) +*
+          td(a0, textNode(floatToString(model.instr.orderid)))
+        ) 
+      )
+    )        
+  };
+  # >>>>>>>>
+
+  var details_results =
+    # >>>>>>>>
+    if (model.instr.instrLines == [] && model.instr.calibrationSets == [])
+      h0
+    else if (model.instr.calibrationSets <> [] && model.instr.instrLines == [])
+      h5(a0,textNode("Calibration Details")) +* detTable(hd(model.instr.calibrationSets)) +*
+      h5(a0,textNode("Calibration Results")) +* cs_calTable(hd(model.instr.calibrationSets).calibrationEvents)
+    else # if (model.instr.instrLines <> [])
+      h5(a0,textNode("Calibration Details")) +* detTable(hd(model.instr.instrLines)) +*
+      h5(a0,textNode("Calibration Results")) +* il_calTable(addDocID(model.instr));
+
+  div(class("container-fluid"),
+    h5(a0,textNode("Instrument")) +* infoTable +* details_results)
+}
+
+#========================= MAIN =================================
+
+fun mainPage() {
+  # --------
+  var ilcs_id = 
+    # >>>>>>>>
+    switch (lookup("ilcs_id", environment())) { # instrumentline/calibrationevent key
+      case Just(id)  -> if (isInt(id)) stringToInt(id) else -1
+      case Nothing   -> -1
+    };
+  # >>>>>>>>
+  if (ilcs_id <> -1) {
+    runSimple("placeholder", (instr = getInstrument(ilcs_id)), view, updt);
+    template()
+  } else page <html>Missing id?</html>
+}

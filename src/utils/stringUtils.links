@@ -1,0 +1,54 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+fun strTake (i,s) { # String level version of take
+  implode(take(i,explode(s)))
+}
+
+fun strDrop (i,s) { # String level version of drop
+  implode(drop(i,explode(s)))
+}
+
+fun strLen (s) { # String level version of length
+  length(explode(s))
+}
+
+fun datePrint (s) {
+      #implode(take(10,explode(show(s))))
+      var d = strsub(show(s),0,10);
+      strsub(d,8,2)^^"/"^^strsub(d,5,2)^^"/"^^strsub(d,0,4)
+    }
+
+fun dateTimePrint (s) {
+  var d = show(s);
+  strsub(d,8,2)^^"/"^^strsub(d,5,2)^^"/"^^strsub(d,0,4)^^strsub(d,10,6)
+}
+
+
+fun nSp(n) {
+  if (n <= 0) ""
+  else "&nbsp;" ^^ nSp(n-1)
+}
+
+fun indentWithDashes(s, n) {
+  if (s == 0)
+    ""
+  else
+    unwords(replicate(s, "&nbsp" ^^ unwords(replicate(n-2, "&nbsp"))))
+}
+
+fun replaceChar (s,f,r) {
+  fun replaceCharList (l,f,r) {
+    switch (l) {
+      case []    -> []
+      case x::xs -> if (x==f)
+                      r::replaceCharList(xs,f,r)
+                    else
+                      x::replaceCharList(xs,f,r)
+    }
+  }
+  implode(replaceCharList(explode(s),f,r))
+}
+
+

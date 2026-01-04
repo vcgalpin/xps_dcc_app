@@ -1,0 +1,407 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides a web page to view all calibrations and to select calibrations for comparison
+# by individual selection, instrument selection or model selection
+#
+# TO DO: set buttons for select model and select instrument to disabled 
+# when no calibrated instruments for a model and no calibrations for an instrument.
+# This is low priority because it is a minor UI issue.
+#
+# TO DO: changes buttons for select model and select instrument to unselect
+# when all calibrations for a model chosen and all calibrations for an instrument
+# chosen, do the opposite when a selection changes the all status for either/both
+# This is low priority because it is a minor UI issue.
+
+# webpage template
+open import MainXPSTemplate;
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+open import GeneralUtils;
+
+# DCC curation specific
+open import XmlDocumentTables;
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import GeneralXPS;
+open import SelectionXPS;
+open import XmlXPS;
+
+# ================ TYPES =============================
+
+typename Model = (instrs: [Instrument], 
+                  seqPELabels : [(label:String)],
+                  modelDisplay: [ModelDisplay], 
+                  instrDisplay: [InstrDisplay],
+                  selection: [Select]);
+
+                  # types defined in TypesXPS and SelectionXPS
+
+typename Message = [| NotCurrentlyUsed |
+                      SelectAll: Int |
+                      SelectInstr: Int |
+                      SelectModel: String | 
+                      UnselectAll: Int |
+                      UnselectInstr: Int |
+                      UnselectModel: String | 
+                      ToggleInstr: Int |
+                      ToggleModel: String | 
+                      TickBox: (Int,Int,Float) |
+                      PerformComparison |
+                      ClearSelection |];
+
+
+#============ FUNCTIONS ==================================
+
+#== database functions
+   
+fun getCalibrationSetsAndCalibrationEvents (id) {
+  # >>>>>>>>
+  query nested {
+    for (cs <-- calibrationSet)
+      where (cs.instrumentid == id)
+       [(calibrationEvents = 
+           for (ce <-- calibrationEvent)
+             where (ce.calibrationsetid == cs.id)
+               [(xmldocument = [] | ce)]
+       | cs)]
+  }
+}
+
+# this function reorders the instruments and is purely for demo purposes
+fun reorderInstrs(instr) {
+  # >>>>>>>>
+  drop(3,instr) ++ take(3,instr)
+  #drop(5, take(6, instr)) ++ drop(3, take(5, instr)) ++ drop(6, instr) ++ take(3, instr)
+}
+
+fun getInstruments () {
+  # >>>>>>>>
+  var instrs = 
+    query nested { 
+      for (i <-- instrument) 
+        orderby (i.id) [i]
+    };
+  reorderInstrs ( # this call is for demo purposes only and can be removed
+    for (i <- instrs)
+      [(showdetails = true | 
+       (calibrationSets = getCalibrationSetsAndCalibrationEvents(i.id) | 
+       (instrLines = [] | i)))
+      ]
+  ) 
+}
+
+#== data collection functions
+
+fun getModelList (instrs) {
+  # >>>>>>>>
+  dedup(for (x <- instrs) [ (modelName = x.model, showdetails = true, selected = false) ])
+}
+
+fun getInstrList (instrs) {
+  # >>>>>>>>
+  for (x <- instrs) [ (instrID = x.id, selected = false) ]
+}
+
+
+#============= UPDT ==========================
+
+  sig updt : (Message, Model) {}~> Model
+  fun updt(msg, model) {
+    # >>>>>>>>
+    switch(msg) {
+      case PerformComparison ->
+             ignore(writeSelected(model.selection)); redirect("/gotoComparison"); model 
+                               
+      case ToggleInstr(id) -> 
+             (model with instrs=updateInstrShowDetails(model.instrs,id))                   
+      case ToggleModel(name) -> 
+             (model with modelDisplay=updateModelShowDetails(model.modelDisplay,name))
+
+      case TickBox (cs_id,seq,pe) ->
+             (model with selection=map(toggleSelection(cs_id,seq,pe),model.selection)) 
+             # need to modify modelDisplay and instrDisplay, not high priorty
+
+      case SelectAll(cs_id) ->  
+             (model with selection = map(toggleAll(cs_id),model.selection))
+      case UnselectAll(cs_id) -> 
+             (model with selection = map(toggleAll(cs_id),model.selection))
+
+      case SelectInstr(id) -> 
+             ((model with selection = addInstrSelection(id,model)) 
+                     with instrDisplay = map(toggleInstrDisplay(id),model.instrDisplay))
+      case UnselectInstr(id) -> 
+             ((model with selection = removeInstrSelection(id,model)) 
+                     with instrDisplay = map(toggleInstrDisplay(id),model.instrDisplay))
+
+      case SelectModel(s) -> 
+             (((model with instrDisplay = unselectInstrButtons(s,model)) 
+                      with selection = addModelSelection(s,model)) 
+                      with modelDisplay = map(toggleModelDisplay(s),model.modelDisplay))
+
+      case UnselectModel(s) -> 
+             (((model with instrDisplay = selectInstrButtons(s,model)) 
+                      with selection = removeModelSelection(s,model)) 
+                      with modelDisplay = map(toggleModelDisplay(s),model.modelDisplay))
+
+      case ClearSelection -> 
+             unselectAllInstrAndModel(model)
+
+      case NotCurrentlyUsed -> 
+             model
+    }
+  }
+
+#============= VIEW =========================
+
+  sig view : (Model) ~> MvuHTML.HTML(Message)
+
+  fun view(model) {
+    # >>>>>>>>  
+    # width parameters for tables and width function
+
+    var instr_col = 310; 
+    var caldate_col = 150; 
+    var version_col = 60; 
+    var cal_col = 68;
+    var action_col = 180;
+
+    fun makeWidth (w) {
+      # >>>>>>>>
+      style("width: "^^intToString(w)^^"px")
+    }    
+
+    #== buttons to select/unselect groups of calibrations
+    
+    fun modelButton (m) {
+      # >>>>>>>
+      if (modelSelected(m,model.modelDisplay))
+        div(class("form-inline"),
+          availButton(UnselectModel(m), textNode("Unselect Model")))
+      else
+        div(class("form-inline"),
+          availButton(SelectModel(m), textNode("Select Model")))
+    }
+          
+    fun instrButton (i) {
+      # >>>>>>>>
+      if (instrSelected(i,model.instrDisplay))
+        div(class("form-inline"),
+          availButton(UnselectInstr(i), textNode("Unselect Instrument")))
+      else
+        div(class("form-inline"),
+          availButton(SelectInstr(i), textNode("Select Instrument")))
+    }
+
+    fun allButton (cs,all_selected) {
+      # >>>>>>>>
+      if (all_selected)
+        div(class("form-inline"),
+          availButton(UnselectAll(cs), textNode("Unselect All")))
+      else
+        div(class("form-inline"),
+          availButton(SelectAll(cs), textNode("Select All")))
+    }
+
+    #== buttons that affect the whole page
+
+    var globalButtons = 
+      div(class("form-inline"),
+        availButton(PerformComparison, textNode("Calibration Comparison")) +*
+        availButton(ClearSelection, textNode("Clear Selection"))
+      );
+
+    #== individual checkboxes for each sequence number and pass energy
+
+    fun calibrationCheckBoxes (cs_id) {
+      # --------
+      # note: spaces have been used to align checkboxes 
+      # there must be a better way to do this
+      fun checkBox (item) {
+        # >>>>>>>
+        var checkID = "CS"^^intToString(cs_id)^^"_"^^item.label; # label to link up HTML elements
+        if (item.available) {
+          var checkedAttr =
+            if (item.selected) {
+              attr("checked", "checked")
+            } else {
+              a0 #empty
+            };  
+          div(class("form-check-inline"),      
+            input(class("form-check-input-lg") +@ type("checkbox") +@ id(checkID) +@
+              checkedAttr +@ onClick(fun() { TickBox(cs_id,item.seq,item.pe) }),h0)
+          +*
+          label(class("form-check-label") +@ for_(checkID), unescapedTextNode(nSp(2))))
+        } 
+        else
+          div(class("form-check-inline"),      
+            input(class("form-check-input-lg") +@ type("checkbox") +@ id(checkID) +@
+              attr("disabled", "disabled") +@ onClick(fun() { TickBox(cs_id,item.seq,item.pe) }),h0)
+          +*
+          label(class("form-check-label") +@ for_(checkID), unescapedTextNode(nSp(2))))
+      }
+      # --------
+      fun renderCalCheckBoxes (seqPEs) {
+        # --------
+        fun renderCalCheckBox (item) {
+           td(style("cal_colwidth") +@ attr("align","center"), unescapedTextNode(nSp(5)) +* checkBox(item))
+      }
+      # >>>>>>>>
+      switch (seqPEs) {
+        case []    -> h0
+        case x::xs -> renderCalCheckBox(x) +* renderCalCheckBoxes(xs)
+      }
+    }
+    # >>>>>>>>
+    
+    # find the only item in the selection data structure that should match cs_id
+    var match_cs_id = findOnlyItemInList(cs_id,model.selection,fun(x,y){x==y.cs_id});
+    renderCalCheckBoxes(match_cs_id.seqPEs) +*
+      td(makeWidth(action_col+10) +@ attr("align","right"), allButton(cs_id,match_cs_id.all_selected))
+    }
+
+    #== table constructions functions: models at top level, then instruments, then calibration sets
+  
+    fun renderCalibrationSets (showdetails,d) {
+      # --------
+      fun renderCalibrationSet (x) {
+        # >>>>>>>
+        tr(a0,
+         td(makeWidth(instr_col),h0) +*
+         td(makeWidth(caldate_col),textNode(dateTimePrint(x.calibrationdate))) +*
+         td(makeWidth(version_col) +@ attr("align","center"), textNode(intToString(x.versionnumber))) +*
+         calibrationCheckBoxes(x.id) 
+        )
+      }
+      # >>>>>>>>
+      if (not(showdetails) || d == [])
+        h0
+      else renderCalibrationSet(hd(d)) +* renderCalibrationSets(showdetails,tl(d))
+    }
+
+    fun renderInstrRows (l,m) {
+      # --------   
+      fun renderInstrRow(x) {
+        # >>>>>>> 
+        var opencloseButton = 
+          if (x.showdetails) 
+            toggleButton(ToggleInstr(x.id),nSp(6)^^showArrow^^nSp(6)^^x.serialnumber^^" ("^^intToString(x.companyid)^^")") 
+          else 
+            toggleButton(ToggleInstr(x.id),nSp(6)^^hideArrow^^nSp(6)^^x.serialnumber^^" ("^^intToString(x.companyid)^^")");
+        tr(a0,
+           td(makeWidth(instr_col), opencloseButton) +*
+           td(makeWidth(caldate_col+version_col+(cal_col*length(hd(model.selection).seqPEs))), textNode("")) +*      
+           td(makeWidth(action_col) +@ attr("align","right"), instrButton(x.id))
+        ) +* 
+        renderCalibrationSets(x.showdetails,x.calibrationSets)
+      }
+      # >>>>>>>>
+      if (not(m.showdetails) || l==[])
+        h0
+      else
+        switch (l) {         # each instrument appears with others of the same model
+          case []    -> h0
+          case x::xs -> if (x.model==m.modelName)
+                          renderInstrRow(x) +* renderInstrRows(xs,m)
+                        else 
+                          renderInstrRows(xs,m)
+        }      
+    }
+
+   fun renderModelRows (m) {
+     # ---------
+     fun renderModelRow(x) {
+        # >>>>>>>
+        var opencloseButton = 
+          if (x.showdetails) 
+            toggleButton(ToggleModel(x.modelName),showArrow^^nSp(6)^^x.modelName) 
+          else 
+            toggleButton(ToggleModel(x.modelName),hideArrow^^nSp(6)^^x.modelName);
+        tr(a0,
+          td(makeWidth(instr_col), opencloseButton) +*
+          td(makeWidth(caldate_col+version_col+(cal_col*length(hd(model.selection).seqPEs))), textNode("")) +* 
+          td(makeWidth(action_col) +@ attr("align","right"), modelButton(x.modelName))
+        ) +* 
+        renderInstrRows(model.instrs,x)
+      }
+      # >>>>>>>>
+      switch (m) {
+        case []    -> h0
+        case x::xs -> renderModelRow(x) +* renderModelRows(xs)
+      }   
+    }         
+
+   fun renderSeqPETitles (labels) {
+     # --------
+     fun renderSeqPETitle (sp) {
+       # >>>>>>>
+       td(makeWidth(cal_col) +@ attr("align","center"), textNode(sp.label))
+     }
+     # >>>>>>>
+     switch (labels) {
+       case []    -> h0
+       case x::xs -> renderSeqPETitle(x) +* renderSeqPETitles(xs)
+     }
+   }
+   # >>>>>>
+
+   # == table construction
+
+   var modelTable = {
+     if (model.instrDisplay ==[] || model.modelDisplay == [])
+       unescapedTextNode("<br><br> There are no instruments available or no instruments with model names available")
+     else {
+       var tableContent = table_(class("table table-sm"),
+                             tbody(a0, renderModelRows(model.modelDisplay)));
+       # --------
+       table_(class("table table-sm table-bordered align-middle contains-scrolldown"),
+         tbody(a0,
+           tr(a0, 
+             td(makeWidth(instr_col), textNode("Model name/Serial number (Company ID)")) +*
+             td(makeWidth(caldate_col) +@ attr("align","center"), textNode("Calibrated")) +*
+             td(makeWidth(version_col) ,textNode("Version")) +*  
+             renderSeqPETitles(model.seqPELabels) +*
+             td(makeWidth(action_col+5) +@ attr("align","center"), textNode("Actions"))
+           ) 
+           +* tr(a0, td(a0, tableContent)) 
+         )
+       )       
+      }
+    };
+    div(class("container-fluid"),h4(a0,textNode("Calibrations Overview") +* globalButtons) +* 
+      modelTable +* globalButtons)
+  }
+
+
+# ====================== MAIN =======================
+
+fun mainPage() {
+  # >>>>>>>>
+  var instrs = getInstruments();
+  var modelDisplay = getModelList(instrs);
+  var instrDisplay = getInstrList(instrs);
+  var seqPELabels = 
+    for (x <- seqPE_list) [(label = x.label)];  # defined in SelectionXPS      
+  
+
+  runSimple("placeholder", 
+    (instrs = instrs, 
+     modelDisplay=modelDisplay, 
+     instrDisplay=instrDisplay,
+     seqPELabels = seqPELabels, 
+     selection = findSelectedCalibrations(instrs)), 
+     view, updt);
+  template()
+}

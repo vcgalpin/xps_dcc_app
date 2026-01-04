@@ -1,0 +1,1092 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# creates a DCC from data in the XPS portal
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+
+# general
+open import StringUtils;
+open import GeneralUtils;
+
+# XPS application
+open import DatabaseXPS;
+open import TypesXPS;
+open import XmlDatabase;
+open import XmlDocumentTables;
+
+#================ TYPES =============================
+
+typename XmlVariant = mu b.[[| Attr:(String, String) |
+                               Node:(String, b) |
+                               NsAttr:(String, String, String) |
+                               NsNode:(String, String, b) |
+                               Text:String|]];
+
+#============= FUNCTIONS ============================
+
+#== auxiliary function to deal with casting problem
+
+fun makeText (s) {
+  # >>>>>>>>
+  sig makeTextVariant: (String) -> XmlVariant
+  fun makeTextVariant (s) {
+    [Text(s)]
+  }
+  variantToXml(makeTextVariant(s))
+}
+
+#== create DCC
+
+fun createDCCFromDB (caldata) server {
+  # --------
+
+  ##### administrative data
+
+  fun createAdminData () server {
+  # >>>>>>>>
+  makeXml("dcc:administrativeData",[],
+    [makeXml("dcc:dccSoftware",[],
+      [makeXml("dcc:software",[],
+        [makeXml("dcc:name",[],
+          [makeXml("dcc:content",[],
+            makeText("Links DCC generation tool")      ## modified
+          )]
+        )]++
+        [makeXml("dcc:release",[],
+          makeText("v0.1")                             ## modified
+        )]
+      )]
+    )]++
+    [makeXml("dcc:coreData",[],
+      [makeXml("dcc:countryCodeISO3166_1",[],
+        makeText("GB")
+      )]++
+      [makeXml("dcc:usedLangCodeISO639_1",[],
+        makeText("en")
+      )]++
+      [makeXml("dcc:mandatoryLangCodeISO639_1",[],
+        makeText("en")
+      )]++
+      [makeXml("dcc:uniqueIdentifier",[],
+        makeText(caldata.calgroup.orderid)             ## from db
+      )]++
+      [makeXml("dcc:beginPerformanceDate",[],
+        makeText(strsub(show(caldata.instrline.calibrationdate),0,10))  ## from db
+      )]++
+      [makeXml("dcc:endPerformanceDate",[],
+        makeText(strsub(show(caldata.instrline.calibrationdate),0,10))  ## from db
+      )]++
+      [makeXml("dcc:performanceLocation",[],
+        makeText("laboratory")
+      )]++
+      [makeXml("dcc:issueDate",[],
+        makeText(strsub(show(now()),0,10))             ## not from db, set to now
+      )]
+    )]++
+    [makeXml("dcc:items",[],
+      [makeXml("dcc:item",[],
+        [makeXml("dcc:name",[],
+          [makeXml("dcc:content",[("lang", "en")],
+            makeText("XPS Spectrometer")
+          )]
+        )]++
+        [makeXml("dcc:model",[],
+          makeText(caldata.instr.model)                 ## from db
+        )]++
+        [makeXml("dcc:identifications",[],
+          [makeXml("dcc:identification",[],
+            [makeXml("dcc:issuer",[],
+              makeText("other")                        ## no info in DB 
+            )]++
+            [makeXml("dcc:value",[],
+              makeText(caldata.instr.serialnumber)      ## from db
+            )]++
+            [makeXml("dcc:name",[],
+              [makeXml("dcc:content",[("lang", "en")],
+                makeText("Serial number")
+              )]
+            )]
+          )]
+        )]
+      )]
+    )]++
+    [makeXml("dcc:calibrationLaboratory",[],
+      [makeXml("dcc:contact",[],
+        [makeXml("dcc:name",[],
+          [makeXml("dcc:content",[("lang", "en")],
+            makeText("TBC")
+          )]
+        )]++
+        [makeXml("dcc:eMail",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:phone",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:fax",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:location",[],
+          [makeXml("dcc:city",[],
+            makeText("TBC")
+          )]++
+          [makeXml("dcc:countryCode",[],
+            makeText("GB")
+          )]++
+          [makeXml("dcc:postCode",[],
+            makeText("TBC")
+          )]++
+          [makeXml("dcc:state",[],
+            makeText("TBC")
+          )]++
+          [makeXml("dcc:street",[],
+            makeText("TBC")
+          )]++
+          [makeXml("dcc:streetNo",[],
+            makeText("TBC")
+          )]
+        )]
+      )]
+    )]++
+    [makeXml("dcc:respPersons",[],
+      [makeXml("dcc:respPerson",[],
+        [makeXml("dcc:person",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("TBC")                            ## could come from db
+            )]
+          )]++
+          [makeXml("dcc:eMail",[],
+            makeText("TBC")
+          )]++
+          [makeXml("dcc:phone",[],
+            makeText("TBC")
+          )]++
+          [makeXml("dcc:fax",[],
+            makeText("TBC")
+          )]
+        )]++
+        [makeXml("dcc:role",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:mainSigner",[],
+          makeText("true")
+        )]
+      )]
+    )]++
+    [makeXml("dcc:customer",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText(intToString(caldata.instr.companyid))   ## from db
+        )]
+      )]++
+      [makeXml("dcc:eMail",[],
+        makeText("TBC")
+      )]++
+      [makeXml("dcc:phone",[],
+        makeText("TBC")
+      )]++
+      [makeXml("dcc:fax",[],
+        makeText("TBC")
+      )]++
+      [makeXml("dcc:location",[],
+        [makeXml("dcc:city",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:countryCode",[],
+          makeText("GB")
+        )]++
+        [makeXml("dcc:postCode",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:state",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:street",[],
+          makeText("TBC")
+        )]++
+        [makeXml("dcc:streetNo",[],
+          makeText("TBC")
+        )]
+      )]
+    )]++
+    [makeXml("dcc:statements",[],
+      [makeXml("dcc:statement",[],
+        [makeXml("dcc:description",[],
+          [makeXml("dcc:content",[("lang", "en")],
+            makeText("This certificate describes the Intensity/Energy response function Q(E) derived using TBC Software Release 9/99 (see J. Elec. Spectrosc. 71, 191-204, 1995. Kinetic Energy E is referred to the Fermi Level. This calibration is for XPS data recorded in accordance with Spectrum Acquisition Guide")
+          )]
+        )]++
+        [makeXml("dcc:reference",[],
+          makeText("https://doi.org/10.1016/0368-2048(94)02275-5")
+        )]++
+        [makeXml("dcc:declaration",[],
+          [makeXml("dcc:content",[("lang", "en")],
+            makeText("This certificate provides traceability of measurement to the SI system of units, to units of measurement realised at recognised national metrology institutes, or to other internationally recognised standards. This certificate may not be reproduced other than in full, unless permission for the publication of an approved extract has been obtained in writing from the issuer. The data included in this certificate applies only to those items specifically listed as tested, calibrated or sampled and cannot be used to assign any attributes beyond those shown by the data.")
+          )]
+        )]
+      )]
+    )]
+  )
+  }
+
+  ##### measurement results
+
+  fun createMeasurementResults () server {
+  # --------
+  fun makeResultsList (content,description,xdata,ydata) {
+    # >>>>>>>>
+  makeXml("dcc:result",[],
+    [makeXml("dcc:name",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText(content)
+      )]
+    )]++
+    [makeXml("dcc:description",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText(description)
+      )]
+    )]++
+    [makeXml("dcc:data",[],
+      [makeXml("dcc:list",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("X-axis")
+            )]
+          )]++
+          [makeXml("si:realListXMLList",[],
+            [makeXml("si:valueXMLList",[],
+              makeText(xdata)                 ## from db
+            )]++
+            [makeXml("si:unitXMLList",[],
+              makeText("eV")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Y-axis")
+            )]
+          )]++
+          [makeXml("si:realListXMLList",[],
+            [makeXml("si:valueXMLList",[],
+              makeText(ydata)                ## from db
+            )]++
+            [makeXml("si:unitXMLList",[],
+              makeText("X_o")
+            )]
+          )]
+        )]
+      )]
+    )]
+  )
+  }
+
+  var name = 
+    # >>>>>>>>
+  makeXml("dcc:name",[],
+    [makeXml("dcc:content",[("lang", "en")],
+      makeText("Pass Energy:"^^floatToString(caldata.calgroup.passenergy))    ## unique id?
+    )]
+  );
+
+  var usedMethods = 
+    # >>>>>>>>
+  makeXml("dcc:usedMethods",[],
+    [makeXml("dcc:usedMethod",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Intensity/Energy response function Q(E)")
+        )]
+      )]++
+      [makeXml("dcc:description",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("The Intensity/Energy response function Q(E) is derived using TBC Software Release 9/99 (see J. Elec. Spectrosc. 71, 191-204, 1995). Kinetic Energy E is referred to the Fermi Level. This calibration is for XPS data recorded in accordance with Spectrum Acquisition Guide")
+        )]
+      )]++
+      [makeXml("dcc:reference",[],
+        makeText("https://doi.org/10.1016/0368-2048(94)02275-5")
+      )]
+    )]++
+    [makeXml("dcc:usedMethod",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Analyser mode")
+        )]
+      )]++
+      [makeXml("dcc:description",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          #maketext("FAT")
+          makeText(caldata.calgroup.analysermode)   ## from db
+        )]
+      )]
+    )]++
+    [makeXml("dcc:usedMethod",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Anode material")
+        )]
+      )]++
+      [makeXml("dcc:description",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          #makeText("Aluminium Mono")
+          makeText(intToString(caldata.instr.anode))  ## from db
+        )]
+      )]
+    )]
+  );
+
+  var influenceConditions = 
+    # >>>>>>>>
+  makeXml("dcc:influenceConditions",[],
+    [makeXml("dcc:influenceCondition",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Pass energy")
+        )]
+      )]++
+      [makeXml("dcc:description",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("electronvolt (eV) is not an SI unit and could be converted to \\Joule at 1eV = 1.602176634×10−19 \\Joule")
+        )]
+      )]++
+      [makeXml("dcc:data",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("si:real",[],
+            [makeXml("si:label",[],
+              makeText("PE")
+            )]++
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.passenergy))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("eV")
+            )]
+          )]
+        )]
+      )]
+    )]++
+    [makeXml("dcc:influenceCondition",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Gamma angle")
+        )]
+      )]++
+      [makeXml("dcc:data",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.instr.gamma))          ## from db 
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\degree")
+            )]
+          )]
+        )]
+      )]
+    )]++
+    [makeXml("dcc:influenceCondition",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Xi angle")
+        )]
+      )]++
+      [makeXml("dcc:data",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.instr.xi))            ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\degree")
+            )]
+          )]
+        )]
+      )]
+    )]++
+    [makeXml("dcc:influenceCondition",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Anode voltage")
+        )]
+      )]++
+      [makeXml("dcc:data",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              #makeText(floatToString(caldata.instr.anode_kv))           ## from db
+              makeText(floatToString(caldata.calgroup.anodevoltage))    ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\kilo\\Volt")
+            )]
+          )]
+        )]
+      )]
+    )]++
+    [makeXml("dcc:influenceCondition",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Anode emission")
+        )]
+      )]++
+      [makeXml("dcc:data",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.anodeemission))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\milli\\Ampere")
+            )]
+          )]
+        )]
+      )]
+    )]
+  );
+ 
+  var metaData = 
+    # >>>>>>>>
+  makeXml("dcc:measurementMetaData",[],
+    [makeXml("dcc:metaData",[],
+      [makeXml("dcc:name",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Metadata")
+        )]
+      )]++
+      [makeXml("dcc:description",[],
+        [makeXml("dcc:content",[("lang", "en")],
+          makeText("Conditions (excluding pass energy)")
+        )]
+      )]++
+      [makeXml("dcc:data",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Analyser Mode")
+            )]
+          )]++
+          [makeXml("dcc:noQuantity",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              #maketext("FAT")
+              makeText(caldata.calgroup.analysermode)   ## from db
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Gamma angle")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.instr.gamma))            ## from db 
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\degree")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Xi angle")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.instr.xi))              ## from db 
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\degree")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Anode material")
+            )]
+          )]++
+          [makeXml("dcc:noQuantity",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              #makeText("Aluminium Mono")
+              makeText(intToString(caldata.instr.anode))            ## from db
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Anode voltage")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              #makeText(floatToString(caldata.instr.anode_kv))           ## from db
+              makeText(floatToString(caldata.calgroup.anodevoltage))    ## from db
+             )]++
+            [makeXml("si:unit",[],
+              makeText("\\kilo\\Volt")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Anode emission")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.anodeemission))   ## from db
+             )]++
+            [makeXml("si:unit",[],
+              makeText("\\milli\\Ampere")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Power")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.sourcepower))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("\\Watt")
+            )]
+          )]
+        )]
+      )]
+    )]
+  );
+
+  fun replaceCommaWithSpace (s) {
+    # >>>>>>>>
+    replaceChar(s,',',' ')
+  }
+
+  var r1_Cu = 
+    # >>>>>>>>
+    makeResultsList("Copper","Smoothed data",
+      replaceCommaWithSpace(caldata.dataCu.xaxisvalue),
+      replaceCommaWithSpace(caldata.dataCu.yaxisvalue));
+
+  var r2_Ag =
+    # >>>>>>>> 
+    makeResultsList("Silver","Smoothed data",
+      replaceCommaWithSpace(caldata.dataAg.xaxisvalue),
+      replaceCommaWithSpace(caldata.dataAg.yaxisvalue));
+
+  var r3_Au = 
+    # >>>>>>>>
+    makeResultsList("Gold","Smoothed data",
+      replaceCommaWithSpace(caldata.dataAu.xaxisvalue),
+      replaceCommaWithSpace(caldata.dataAu.yaxisvalue));
+
+  var r4_pw = 
+    # >>>>>>>>
+    makeResultsList("Q(E)","Pointwise representation of response function (derived from Copper, Silver and Gold data)",
+      replaceCommaWithSpace(caldata.dataQE.xaxisvalue),
+      replaceCommaWithSpace(caldata.dataQE.yaxisvalue)); 
+
+
+  var r5_eq = 
+    # >>>>>>>>
+  makeXml("dcc:result",[],
+    [makeXml("dcc:name",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText("Q(E)")
+      )]
+    )]++
+    [makeXml("dcc:description",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText("Equational representation of response function")
+      )]++
+      [makeXml("dcc:formula",[],
+        [makeXml("dcc:latex",[],
+          makeText("Q(E) = \\frac{a_0 + a_1\\varepsilon + a_2\\varepsilon^2 + a_3\\varepsilon^3 + a_4\\varepsilon^4}{1+ b_1\\varepsilon + b_2\\varepsilon^2 + b_3\\varepsilon^3 + b_4\\varepsilon^4} X_0 \\;\\textrm{units} \\;\\;\\textrm{where} \\;\\varepsilon = \\frac{E-1000\\;\\textrm{eV}}{1000\\;\\textrm{eV}}")
+        )]
+      )]
+    )]++
+    [makeXml("dcc:data",[],
+      [makeXml("dcc:list",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("a_0")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_a0))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("a_1")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_a1))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++        
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("a_2")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_a2))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("a_3")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_a3))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("a_4")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_a4))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("b_1")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_b1))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("b_2")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_b2))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("b_3")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_b3))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("b_4")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_b4))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]
+      )]
+    )]
+  );
+
+  var r6_ar = 
+    # >>>>>>>>
+  makeXml("dcc:result",[],
+    [makeXml("dcc:name",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText("Q(E)")
+      )]
+    )]++
+    [makeXml("dcc:description",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText("Additional results")
+      )]
+    )]++
+    [makeXml("dcc:data",[],
+      [makeXml("dcc:list",[],
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Minimum valid calibration energy: E_min")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.minimumcalibratedenergy))   ## from db
+            )]++ 
+            [makeXml("si:unit",[],
+              makeText("eV")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Maximum valid calibration energy: E_max")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.maximumcalibratedenergy))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("eV")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Response at kinetic energy = 1000 eV: X_0 units")
+            )]
+          )]++
+          [makeXml("si:constant",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.parameter_a0))   ## from db - same as a_0
+            )]++
+            [makeXml("si:unit",[],
+              makeText("X_0")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Percentage rms scatter: r")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            #[makeXml("si:label",[],                              ## not needed                           
+            #  makeText("r")
+            #)]++
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.scatter))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("percentage")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Energy calibration shift indicated: E_ind")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.energyshift))   ## from db - is this correct?
+            )]++
+            [makeXml("si:unit",[],
+              makeText("eV")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Energy calibration shift used: E_used")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.energyshift))   ## from db - is this correct?
+            )]++
+            [makeXml("si:unit",[],
+              makeText("eV")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Ag divergence from mean: R_Ag")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.rbarag))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Gold divergence from mean: R_Au ")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.rbarau))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")
+            )]
+          )]
+        )]++
+        [makeXml("dcc:quantity",[],
+          [makeXml("dcc:name",[],
+            [makeXml("dcc:content",[("lang", "en")],
+              makeText("Copper divergence from means: R_Cu")
+            )]
+          )]++
+          [makeXml("si:real",[],
+            [makeXml("si:value",[],
+              makeText(floatToString(caldata.calgroup.rbarcu))   ## from db
+            )]++
+            [makeXml("si:unit",[],
+              makeText("1")                    
+            )]
+          )]
+        )]
+      )]
+    )]
+  );
+
+  var r7_ru = 
+    # >>>>>>>>
+  makeXml("dcc:result",[],
+    [makeXml("dcc:name",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText("U_r")
+      )]
+    )]++
+    [makeXml("dcc:description",[],
+      [makeXml("dcc:content",[("lang", "en")],
+        makeText("Relative uncertainty in the energy independence of Q(E), ignoring the uncertainty of the method")
+      )]
+    )]++
+    [makeXml("dcc:data",[],
+      [makeXml("dcc:quantity",[],
+        [makeXml("dcc:name",[],
+          [makeXml("dcc:content",[("lang", "en")],
+            makeText("Uncertainty of response function")
+          )]
+        )]++
+        [makeXml("si:real",[],
+          [makeXml("si:value",[],
+            makeText("0")        
+          )]++
+          [makeXml("si:unit",[],
+            makeText("1")
+          )]++
+          [makeXml("si:expandedUnc",[],
+            [makeXml("si:uncertainty",[],
+              makeText(floatToString(caldata.calgroup.uncertainity))   ## from db
+            )]++
+            [makeXml("si:coverageFactor",[],
+              makeText("2")                  ## not in db?
+            )]++
+            [makeXml("si:coverageProbability",[],
+              makeText("0.95")               ## not in db?
+            )]
+          )]
+        )]
+      )]
+    )]
+  );
+  
+  makeXml("dcc:measurementResults",[],
+    [makeXml("dcc:measurementResult",[],
+       [name,usedMethods,influenceConditions,
+        makeXml("dcc:results",[],[r1_Cu, r2_Ag, r3_Au, r4_pw, r5_eq, r6_ar, r7_ru]),
+        metaData]
+     )]
+  )  
+  }
+  # >>>>>>>>
+
+  ##### createDCC
+    
+  var doc =
+    # >>>>>>>>
+    [makeXml("dcc:digitalCalibrationCertificate",
+      [("xmlns:xsi","http://www.w3.org/2001/XMLSchema-instance"),
+       ("xsi:schemaLocation","https://ptb.de/dcc https://ptb.de/dcc/v3.2.1/dcc.xsd"),
+       ("xmlns:dcc","https://ptb.de/dcc"),
+       ("xmlns:si","https://ptb.de/si"),
+       ("schemaVersion","3.2.1")],
+       [{createAdminData()},{createMeasurementResults()}]
+    )];
+
+  var tnames = assoc("npl",table_id_assoc);
+  uploadDocWithTableIDTables(doc,caldata.calgroup.orderid,"npl",tnames)
+}
+
+
+#== database functions
+
+fun getCalibrationData (cg_id)  server {
+  # >>>>>>>>
+
+  # get calibration data for the id given
+  var cal_list = 
+    query nested {
+      for (x <-- calibrationGroup)      
+        for (y <-- instrumentLine)
+          for (z <-- instrument)
+            where (x.id == cg_id &&
+                   x.instrumentlineid == y.id &&
+                   y.instrumentid == z.id)
+              [( instr = z | ( instrline = y | ( calgroup = x )))]
+  };
+  # there should only be one item returned
+  # headSingletonList will return an error otherwise
+  
+  var cal_item = headSingletonList(cal_list);
+
+  # for the calibration, get the data for each of copper, silver, gold and values
+  # of the function defined by the matlab software
+
+  # there should be exactly one item for each
+  # headSingletonList will return an error otherwise
+
+  var dataCu = 
+    headSingletonList(
+      query {for (x <-- categoryData)      
+        where (cal_item.calgroup.id == x.groupid && x.spectrumcategoryid == 1) [x] } );
+  var dataAg = 
+    headSingletonList(
+      query {for (x <-- categoryData)    
+        where (cal_item.calgroup.id == x.groupid && x.spectrumcategoryid == 2) [x] } );
+  var dataAu =
+    headSingletonList( 
+      query {for (x <-- categoryData)     
+        where (cal_item.calgroup.id == x.groupid && x.spectrumcategoryid == 3) [x] } );
+  var dataQE = 
+    headSingletonList( 
+      query {for (x <-- categoryData)    
+        where (cal_item.calgroup.id == x.groupid && x.spectrumcategoryid == 4) [x] } );
+
+  # return this data for further processing
+
+  (dataCu = dataCu |(dataAg = dataAg | 
+  (dataAu = dataAu |(dataQE = dataQE | 
+    cal_item ) )))
+}
+
+
+fun insertDCC (cg_id) server {
+  # >>>>>>>>
+  var caldata = getCalibrationData(cg_id);
+
+  var doc_id = createDCCFromDB(caldata);
+
+  # check if instrumentlineid already appears in calibrationSet
+
+  var cs_list = 
+    query {for (cs <-- calibrationSet)
+      where (cs.instrumentlineid == caldata.instrline.id) [cs]};
+
+  var cs_id = 
+    if (cs_list==[])
+      insert calibrationSet values
+        [(instrumentid = caldata.instr.id, 
+          versionnumber = caldata.instrline.versionnumber, 
+          calibrationdate = caldata.instrline.calibrationdate, 
+          status = 5, 
+          instrumentlineid = caldata.instrline.id
+         )] returning id
+     else
+       headSingletonList(cs_list).id;
+       #if (onlyOneItem(cs_list))
+       #  hd(cs_list).id
+       #else
+       #  error("Expected a single item list");
+
+  # insert into calibrationEvent
+
+  var ce_id = 
+    insert calibrationEvent values
+      [(orderid = caldata.calgroup.orderid, 
+        doc_id = doc_id,
+        timeslice = now(),
+        calibrationsetid = cs_id,
+        passenergy = caldata.calgroup.passenergy, 
+        analysermode = caldata.calgroup.analysermode, 
+        anodeemission = caldata.calgroup.anodeemission, 
+        uncertainty = caldata.calgroup.uncertainity, 
+        calibrationgroupid = caldata.calgroup.id
+      )] returning doc_id;
+
+  # return document id to be passed to inspectDCC
+  doc_id
+}

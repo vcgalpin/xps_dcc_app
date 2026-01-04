@@ -1,0 +1,90 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides list of DCC fields to select information for comparison
+
+# XML specific
+open import XmlDatabase;
+open import XmlDocumentTables;
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import XmlXPS;
+open import ComparisonFieldsXPS;
+
+#================ FUNCTIONS =============================
+
+
+fun getDataFromDcc(fields,info) server {
+  # -------- 
+  fun getFieldData (f,t) server {
+    # --------
+    fun checkForDups (l) {
+      switch (l) {
+        case []         -> []
+        case x::[]      -> [x]
+        case x::y::rest -> if (x.doc_id==y.doc_id)
+                             (doc_id = x.doc_id, cal_label = x.cal_label, value = y.value, 
+                              duplicate=true) :: checkForDups(rest)
+                           else
+                             x::checkForDups(y::rest)
+      }
+    }
+    # >>>>>>>>
+    var nodes = assoc(t,table_id_assoc).node;
+    var before_dedup = 
+      query nested {
+        for (x <-t- nodes)
+          for (i <- info)
+            where ((i.doc_id == ttData(x).doc_id) &&
+                   (ttData(x).dde == f.ddeString))
+              [(doc_id = i.doc_id, cal_label = i.inf_label, value = ttData(x).text, duplicate=false)]
+      }; 
+
+    checkForDups(sortBy(fun(x){x.doc_id},before_dedup))
+
+    # this assumes that records with duplicate labels are in a single node table
+    # this is correct because each label describes a unique calibration certificate 
+    # with a unique doc_id which implies a unique table_id
+  }
+  # >>>>>>>>
+  # reduce the data to just those fields that have been selected
+  var comp =             
+    for (x <- fields)
+      where (any(fun (t) { (t.status == Selected) },x.options))
+        [x];
+  # get the table_id of all tables containing selected calibrations
+  var table_names = dedup( for (i <- info) [i.table_id]);
+
+  for (c <- comp)
+    [(c with dataList = for (t <- table_names) getFieldData(c,t))]    
+}
+
+fun decideContent (c) {
+  # --------
+  fun calcStats (d) {
+    # >>>>>>>>
+    var s = 
+      fold_right(
+        fun (a,b) { stringToFloat(a.value) +. b },
+          0.0,d);
+    [(doc_id = -1, cal_label = "Average", value = floatToString(s/.intToFloat(length(d))), duplicate=false)]
+  }
+  # >>>>>>>>
+  var lst = elem((opt_label="List",status=Selected), c.options);
+  var sts = elem((opt_label="Stats",status=Selected), c.options);
+  var sts_PE = elem((opt_label="Stats_PE",status=Selected), c.options);
+  var amended =
+    (if (lst) c.dataList else [])
+      ++
+    (if (sts) calcStats(c.dataList) else []);
+  # not yet implemented
+  #  ++
+  # (if (sts_PE) calcStats_PE(c.dataList) else []);
+  (c with dataList = amended)
+}
+

@@ -1,0 +1,175 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides list of DCC fields to select information for comparison
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import XmlXPS;
+open import ComparisonInfoXPS;
+
+#================ TYPES =============================
+
+typename Status = [| Disabled 
+                   | Selected 
+                   | Unselected |];
+
+typename Option = (opt_label: String, 
+                   status: Status);
+
+typename DataItem = (doc_id: Int,
+                     cal_label: String, 
+                     value: String,
+                     duplicate: Bool); # if dde is found more than once
+
+typename DccField = (path: String,
+                     fld_label: String, 
+                     descr: String, 
+                     ddeString: String,
+                     options: [Option],
+                     dataList: [DataItem] );
+
+#================ VARIABLES =============================
+
+#=== different analysis options for a DCC field
+
+var no_options = [(opt_label = "List", status = Disabled),
+                    (opt_label = "Stats", status = Disabled),
+                    (opt_label = "Stats_PE", status = Disabled)];
+
+var list_options = [(opt_label = "List", status = Unselected),
+                    (opt_label = "Stats", status = Disabled),
+                    (opt_label = "Stats_PE", status = Disabled)];
+
+var liststats_options = [(opt_label = "List", status = Unselected),
+                    (opt_label = "Stats", status = Unselected),
+                    (opt_label = "Stats_PE", status = Disabled)];
+
+#var list_selected_options = [(opt_label = "List", status = Selected),
+#                    (opt_label = "Stats", status = Disabled),
+#                    (opt_label = "Stats_PE", status = Disabled)];
+
+#var stats_statsEV_selected_options = [(opt_label = "List", status = Disabled),
+#                    (opt_label = "Stats", status = Selected),
+#                    (opt_label = "Stats_PE", status = Selected)];
+
+#var stats_options = [(opt_label = "List", status = Disabled),
+#                    (opt_label = "Stats", status = Unselected),
+#                    (opt_label = "Stats_PE", status = Unselected)];
+
+
+#============ FUNCTIONS ==================================
+
+#== function to set up field tabl data structure
+
+fun listFieldsAD () {
+  # >>>>>>>>
+  [(path = "dcc:administrativeData/dcc:dccSoftware/dcc:software/dcc:name/dcc:content", descr = "Software Name", 
+     fld_label = "dcc:administrativeData/dcc:dccSoftware/dcc:software/dcc:name/dcc:content",
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+001.+001.+001.+001.+001"),
+   (path = "dcc:administrativeData/dcc:dccSoftware/dcc:software/dcc:release", descr = "Software Release",
+     fld_label = "dcc:administrativeData/dcc:dccSoftware/dcc:software/dcc:release",
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+001.+001.+002.+001"),
+   (path = "dcc:administrativeData/dcc:coreData/...", descr = "...",
+     fld_label = "dcc:administrativeData/dcc:coreData/...",
+     options = no_options, dataList = [],
+     ddeString = "+001.+001.+002.+001.+001"),
+#   (path = "dcc:administrativeData/dcc:coreData/dcc:countryCodeISO3166_1", descr = "Country Code",
+#     fld_label = "dcc:administrativeData/dcc:coreData/dcc:countryCodeISO3166_1",
+#     options = list_options, dataList = [],
+#     ddeString = "+001.+001.+002.+001.+001"),
+#   (path = "dcc:administrativeData/dcc:coreData/dcc:usedLangCodeISO3166_1", descr = "Used Language Code", 
+#     fld_label = "dcc:administrativeData/dcc:coreData/dcc:usedLangCodeISO3166_1",
+#     options = list_options, dataList = [],
+#     ddeString = "+001.+001.+002.+002.+001"),
+#   (path = "dcc:administrativeData/dcc:coreData/dcc:mandatoryLangCodeISO3166_1", descr = "Mandatory Language Code", 
+#     fld_label = "dcc:administrativeData/dcc:coreData/dcc:mandatoryLangCodeISO3166_1",
+#     options = list_options, dataList = [],
+#     ddeString = "+001.+001.+002.+003.+001"),
+   (path = "dcc:administrativeData/dcc:coreData/dcc:uniqueIdentifier", descr = "Unique Identifier", 
+     fld_label = "dcc:administrativeData/dcc:coreData/dcc:uniqueIdentifier",
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+002.+004.+001"),
+   (path = "dcc:administrativeData/dcc:coreData/dcc:beginPerformanceDate", descr = "Start Date",
+     fld_label = "dcc:administrativeData/dcc:coreData/dcc:beginPerformanceDate", 
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+002.+005.+001"),
+   (path = "dcc:administrativeData/dcc:coreData/dcc:endPerformanceDate", descr = "End Date", 
+     fld_label = "dcc:administrativeData/dcc:coreData/dcc:endPerformanceDate",
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+002.+006.+001"),
+   (path = "dcc:administrativeData/dcc:coreData/dcc:performanceLocation", descr = "Location", 
+     fld_label = "dcc:administrativeData/dcc:coreData/dcc:performanceLocation",
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+002.+007.+001"),
+   (path = "dcc:administrativeData/dcc:coreData/dcc:issueDate", descr = "Issue Date", 
+     fld_label = "dcc:administrativeData/dcc:coreData/dcc:issueDate",
+     options = list_options, dataList = [],
+     ddeString = "+001.+001.+002.+008.+001"),
+   (path = "dcc:administrativeData/...", descr = "...",
+     fld_label = "dcc:administrativeData/...", 
+     options = no_options, dataList = [],
+     ddeString = "")]  
+#   (path = "dcc:administrativeData/dcc:items/...", descr = "...",
+#     fld_label = "dcc:administrativeData/dcc:items/...", 
+#     options = no_options, dataList = [],
+#     ddeString = ""),
+#   (path = "dcc:administrativeData/dcc:calibrationLaboratory/...", descr = "...", 
+#     fld_label = "dcc:administrativeData/dcc:calibrationLaboratory/...",
+#     options = no_options, dataList = [],
+#     ddeString = ""),
+#   (path = "dcc:administrativeData/dcc:customer/...", descr = "...", 
+#     fld_label = "dcc:administrativeData/dcc:customer/...",
+#     options = no_options, dataList = [],
+#     ddeString = ""),
+#   (path = "dcc:administrativeData/dcc:statements/...", descr = "...", 
+#     fld_label = "dcc:administrativeData/dcc:statements/...",
+#     options = no_options, dataList = [],
+#     ddeString = "")]
+}
+
+fun listFieldsMR () {
+  # >>>>>>>>
+  [(path = "dcc:measurementResults/dcc:measurementResult/dcc:name/...", descr = "...", 
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:name/...",
+     options = no_options, dataList = [],
+     ddeString = ""),
+   (path = "dcc:measurementResults/dcc:measurementResult/dcc:usedMethods/...", descr = "...", 
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:usedMethods/...",
+     options = no_options, dataList = [],
+     ddeString = ""),
+   (path = "dcc:measurementResults/dcc:measurementResult/dcc:influenceConditions/...", descr = "...",
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:influenceConditions/...", 
+     options = no_options, dataList = [],
+     ddeString = ""),
+   (path = "dcc:measurementResults/dcc:measurementResult/dcc:results/...", descr = "...", 
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:results/...",
+     options = no_options, dataList = [],
+     ddeString = ""),
+
+   (path = "dcc:measurementResults/dcc:measurementResult/dcc:results/dcc:result/dcc:data/dcc:quantity/si:real/si:expandedUnc/si:uncertainty", descr = "Uncertainty",
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:results/dcc:result/.../si:expandedUnc/si:uncertainty", 
+     options = liststats_options, dataList = [],
+     ddeString = "+001.+002.+001.+004.+007.+003.+001.+002.+003.+001.+001"),
+   (path = "dcc:measurementResults/dcc:measurementResult/dcc:results/dcc:result/dcc:data/dcc:quantity/si:real/si:expandedUnc/si:coverageFactor", descr = "Coverage Factor", 
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:results/dcc:result/.../si:expandedUnc/si:coverageFactor",
+     options = liststats_options, dataList = [],
+     ddeString = "+001.+002.+001.+004.+007.+003.+001.+002.+003.+002.+001"),
+   (path = "dcc:measurementResults/dcc:measurementResult/dcc:results/dcc:result/dcc:data/dcc:quantity/si:real/si:expandedUnc/si:coverageProbability", descr = "Probability", 
+     fld_label = "dcc:measurementResults/dcc:measurementResult/dcc:results/dcc:result/.../si:expandedUnc/si:coverageProbability", dataList = [],
+     options = liststats_options,
+     ddeString = "+001.+002.+001.+004.+007.+003.+001.+002.+003.+003.+001"),
+
+   (path = "dcc:measurementResult/dcc:measurementMetaData/...", descr = "...", 
+     fld_label = "dcc:measurementResult/dcc:measurementMetaData/...",
+     options = no_options, dataList = [],
+     ddeString = "")]
+}
+
+

@@ -1,0 +1,55 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+# derived from https://github.com/vcgalpin/dcc-xml-temporal
+
+# functions to create types for interacting with SQL tables
+# that store XML data
+# the string provided is appended to the table name
+#
+# this allows for the creation of different groups of XML tables
+
+open import NameOfXMLDB;
+
+fun createNodeTable (name) {
+  # >>>>>>>>
+  table "xml_node_"^^name
+    with (doc_id: Int,
+          dde: String,
+          tag: String,   # redundant?
+          path: String,  # redundant if path_id used
+          path_id: Int,
+          text: String,
+          original: Bool)
+    tablekeys [["doc_id","dde"]]
+    using transaction_time(tt_from, tt_to)
+  from db
+}
+
+fun createAttrTable (name) {
+  # >>>>>>>>
+  table "xml_attr_"^^name
+    with (doc_id: Int,
+          attr: String,
+          dde: String,
+          value: String,
+          original: Bool)
+    tablekeys [["doc_id","attr","dde"]]
+    using transaction_time(tt_from, tt_to)
+  from db
+}
+
+fun createPathTable (name) {
+  # >>>>>>>>
+  table "xml_path_"^^name
+    with (doc_id: Int,
+          path_id: Int,
+          path: String)
+    tablekeys [["doc_id","path_id"]]
+    using transaction_time(tt_from, tt_to)
+  from db
+}
+
+
+

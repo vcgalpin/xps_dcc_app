@@ -1,0 +1,204 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# imports name of XPS database and defines the following tables
+# - XPS tables equivalent to those defined in the XPS portal
+# - one table for storing selection of calibrations for comparison 
+
+open import NameOfXPSDB; 
+
+# tables specific to XPS DCC curator
+
+# keep track of which calibrations have been selected for comparison
+var selected = table "selected"
+      with (cs_id: Int,
+            seq: Int,
+            pe: Float,
+            selected: Bool)
+      tablekeys [["cs_id"]]
+    from db; 
+
+# the next two tables provide information about calibrations that only exist in an XML form and provide the equivalent to two existing tables used by the XPS portal       
+
+# table to provide equivalent of existing "instrumentline" table for XML-only calibrations
+var calibrationSet = table "calibrationset"
+      with (id: Int,
+            instrumentid: Int,
+            versionnumber: Int,                  
+            calibrationdate: DateTime,
+            status: Int,
+            instrumentlineid: Int)       # link to instrumentline table
+    where id readonly
+  from db;
+
+# table to provide equivalent of existing "calibrationgroup" table for XML-only calibrations
+var calibrationEvent = table "calibrationevent"
+      with (id: Int,
+            orderid: String,                  
+            doc_id: Int,
+            timeslice: DateTime,
+            calibrationsetid: Int,
+            passenergy: Float,
+            analysermode: String,
+            anodeemission: Float,
+            uncertainty: Float,
+            calibrationgroupid: Int)     # link to calibrationgroup table
+    where id readonly
+  from db;
+
+# tables from XPS portal
+
+var calibrationCertificate = table "calibrationcertificate"
+  with ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	certificatenumber: String,
+	groupid: Int,                     # FK on calibrationGroup.id
+	versionid: Int,                   # NOT NULL
+	filepath: String,
+	dateofissue: DateTime,            # NOT NULL
+	dateofexpiry: DateTime,           # NOT NULL
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String           # uuid NOT NULL
+        )
+  where id readonly
+  from db;
+
+var calibrationGroup = table "calibrationgroup"
+  with ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	sequence: Int,                    # NOT NULL
+	uncertainity: Float,              # NOT NULL, misspelling from original NPL DB
+	workfunctionvms: Float,           # NOT NULL
+	startofenergyscalevms: Float,     # NOT NULL
+	scatter: Float,                   # NOT NULL
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String,          # uuid NOT NULL
+	acquisitiondate: String,
+	analysermode: String,
+	anodeemission: Float,             # NOT NULL
+	copperinputrange: String,
+	energyshift: Float,               # NOT NULL
+	goldinputrange: String,
+	largestordinatevaluevms: Float,   # NOT NULL
+	xrayenergy: Float,                # NOT NULL
+	numberofordinatevaluesvms: Float, # NOT NULL
+	parameter_a0: Float,              # NOT NULL
+	parameter_a1: Float,              # NOT NULL
+	parameter_a2: Float,              # NOT NULL
+	parameter_a3: Float,              # NOT NULL
+	parameter_a4: Float,              # NOT NULL
+	parameter_b1: Float,              # NOT NULL
+	parameter_b2: Float,              # NOT NULL
+	parameter_b3: Float,              # NOT NULL
+	parameter_b4: Float,              # NOT NULL
+	qmax: Float,                      # NOT NULL
+	qmin: Float,                      # NOT NULL
+	rbarag: Float,                    # NOT NULL
+	rbarau: Float,                    # NOT NULL
+	rbarcu: Float,                    # NOT NULL
+	silverinputrange: String,
+	smallestordinatevaluevms: Float,  # NOT NULL
+	vamasdata: String,
+	orderid: String,
+	status: Int,                      # NOT NULL
+	instrumentlineid: Int,            # FK on instrumentLine.id
+	anodevoltage: Float,              # NOT NULL
+	copperinputfile: String,
+	goldinputfile: String,
+	passenergy: Float,                # NOT NULL
+	silverinputfile: String,
+	sourcepower: Float,               # NOT NULL
+	maximumcalibratedenergy: Float,   # NOT NULL
+	minimumcalibratedenergy: Float,   # NOT NULL
+	referencematerials: String
+       )
+  where id readonly
+  from db;
+
+var categoryData = table "categorydata"
+  with ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	spectrumcategoryid: Int,          # FK on spectrumData.id
+	groupid: Int,                     # FK on calibrationGroup.id
+	filename: String,
+	passenergy: Float,                # NOT NULL
+	block: String,
+	power: Float,                     # NOT NULL
+	xaxisvalue: String,
+	yaxisvalue: String,
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String           # uuid NOT NULL
+       )
+  where id readonly
+  from db;
+
+var instrument = table "instrument"
+  with ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	calibrator: String,
+	model: String,
+	companyid: Int,                   # NOT NULL
+	calibrationid: Int,               # NOT NULL
+	orderid: Float,                   # NOT NULL
+	anode: Int,                       # NOT NULL
+	anode_kv: Float,                  # NOT NULL
+	gamma: Float,                     # NOT NULL
+	xi: Float,                        # NOT NULL
+	serialnumber: String,
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String,          # uuid NOT NULL
+	owner: String,
+	status: Int                       # NOT NULL
+       )
+  where id readonly
+  from db;
+
+var instrumentFile = table "instrumentfile"
+  with ( 
+	id: Int,                          # NOT NULL, generated from sequence
+	filename: String,
+	filetype: Int,                    # NOT NULL
+	fileurl: String, 
+	createddate: DateTime,            # NOT NULL
+	createdby: String,           # uuid NOT NULL
+	modifieddate: DateTime,           # NOT NULL
+	modifiedby: String,          # uuid NOT NULL
+	instrumentlineid: Int,            # FK on instrumentLine.id
+	calibrationgroupid: Int           # FK on calibrationgroup.id
+       )
+  where id readonly
+  from db;
+
+var instrumentLine = table "instrumentline"
+  with ( 
+	id: Int,                           # NOT NULL, generated from sequence
+	instrumentid: Int,                 # FK on instrument.id
+	calibrationdate: DateTime,         # NOT NULL
+	versionnumber: Int,                # NOT NULL
+	createddate: DateTime,             # NOT NULL
+	createdby: String,                 # NOT NULL
+	modifieddate: DateTime,            # NOT NULL
+	modifiedby: String,                # NOT NULL
+	status: Int                        # NOT NULL
+       )
+  where id readonly
+  from db;
+
+var spectrumCategory = table "spectrumcategory"
+  with ( 
+	id: Int,                           # NOT NULL, generated from sequence
+	name: String 
+       )
+  where id readonly
+  from db;

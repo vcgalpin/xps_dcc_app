@@ -1,0 +1,96 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides types and functions for showing comparison of DCCs
+# called by ComparisonPages module
+
+# general
+open import StringUtils;
+
+# XML specific
+open import XmlDatabase;
+
+# XPS application specific
+open import TypesXPS;
+open import DatabaseXPS;
+open import GeneralXPS;
+
+# ================ TYPES =============================
+
+# data structure for the information retrieved about a calibration
+# regardless of which database the calibration is stored in
+
+typename Info = (id: Int,                   # data from calibrationEvents
+                 orderid: String,                  
+                 doc_id: Int,
+                 table_id: String,
+                 xmldocument: [XmlNode],
+                 timeslice: DateTime,
+                 calibrationsetid: Int,
+                 passenergy: Float,
+                 analysermode: String,
+                 anodeemission: Float,
+                 uncertainty: Float,
+                 calibrationgroupid: Int,
+                 calibrationdate:DateTime,  # data from calibrationSets
+                 versionnumber:Int,
+                 instr_id:Int,              # data fom instrument 
+                 companyid:Int,
+                 model:String,
+                 serialnumber:String,
+                 inf_label:String           # used in UI to identify the calibration
+                );
+
+#============ FUNCTIONS ==================================
+
+fun makeLabel (i) {
+  # >>>>>>>>
+  i.serialnumber ^^ " " ^^
+  i.orderid ^^ " V" ^^
+  intToString(i.versionnumber) ^^ " (" ^^
+  datePrint(i.calibrationdate) ^^ ") PE:" ^^
+  intToString(floatToInt(i.passenergy))
+}
+
+fun collectCalInfo (selection,instrs) {
+  # >>>>>>>>
+  var info =
+    for (s <- selection)
+      for (i <- instrs)
+        for (cs <- i.calibrationSets)
+          where (s.cs_id == cs.id)
+            for (e <- s.seqPEs)
+              for (ce <- cs.calibrationEvents)
+                where (e.pe == ce.passenergy &&
+                       e.seq == getSeq(ce.orderid) &&
+                       e.selected)
+                  [(instr_id = i.id |
+                   (serialnumber = i.serialnumber |
+                   (model = i.model |
+                   (companyid = i.companyid |
+                   (versionnumber = cs.versionnumber |
+                   (calibrationdate = cs.calibrationdate |
+                   (table_id = "" |
+                   (inf_label = "" |
+                    ce ))))))))];
+  #var info_table_id = 
+  #  query nested {
+  #    for (x <- info)
+  #      for (y <-- document)
+  #        where (x.doc_id == y.doc_id)
+  #          [(x with table_id = y.table_id)]
+  #};
+  # above code gives internal Links error although it parses
+  # quick and dirty solution
+  for (x <- info)
+    for (y <- query { asList(document) })
+      where (x.doc_id == y.doc_id)
+        [((x with table_id = y.table_id)
+             with inf_label = makeLabel(x))]
+}
+
+
+

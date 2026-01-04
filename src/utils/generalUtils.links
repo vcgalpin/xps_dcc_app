@@ -1,0 +1,58 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+
+# return true if list is singleton else false
+
+fun checkSingletonList (l) {
+  if (l == [] || length(l) > 1)
+    false
+  else
+    true
+}
+
+#return head of list if list is singleton else error
+
+fun headSingletonList (l) {
+  if (l == [] || length(l) > 1)
+    error("singleton list expected")
+  else
+    hd(l)
+}  
+ 
+
+
+# This function looks for an item in list using the function comp for 
+# the comparison,
+# It will return an error if there are no matches or more than one match.
+
+fun findOnlyItemInList(item,list,comp) {
+  # --------
+  fun searchListForItem (l, result) {
+    switch (l) {
+      case []    -> result
+      case x::xs -> 
+        switch ((comp(item,x),result)) {
+          case (false,Nothing) ->           # no match with head, no match found yet, continue
+            searchListForItem(xs,result)   
+          case (false,Just(_)) ->           # no match with head, match already found, continue
+            searchListForItem(xs,result)
+          case (true, Nothing) ->           # match with head, no match found yet, record match, continue
+            searchListForItem(xs,Just(x)) 
+          case (true, Just(_)) ->           # match with head, match already found, flag error
+            error ("Multiple occurrences of item found in list")
+        }
+      }
+    }
+  # >>>>>>>>
+  switch (searchListForItem(list, Nothing)) {
+    case Nothing -> error("Item not found in list")
+    case Just(x) -> x
+  }
+}
+
+fun eq (a,b) {
+  a == b
+}
+

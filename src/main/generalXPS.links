@@ -1,0 +1,51 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# contains useful function and variable definitions specific to the XPS DCC curator
+#
+# ============================ variables 
+
+
+# ============================ functions
+
+# This function takes a 12 character string consisting of 10 digits
+# followed by a dash followed by one digit and returns the final digit.
+# It is used to get the sequence number of a calibration from the 
+# orderid string
+
+fun getSeq (orderid) {
+  # >>>>>>>>
+  if (orderid =~ /[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9]/)
+    stringToInt(strsub(orderid,11,1))
+  else 
+    error("Unexpected format of orderid string")
+}
+
+fun getInstrIDs(instrs) {
+  # >>>>>>>>
+  dedup(for (x <- instrs) [x.id])
+}
+
+fun getCompanyIDs(instrs) {
+  # >>>>>>>>
+  dedup(for (x <- instrs) [x.companyid])
+}
+
+
+# function for removing instruments from the database given a list of ids 
+
+#fun deleteInstrs(l) {
+#  # >>>>>>>>
+#  switch(l) {
+#    case []    -> ()
+#    case x::xs -> delete(y <-- instrument) where (y.id==x);
+#                  deleteInstrs(xs)
+#  }
+#}
+
+
+
+

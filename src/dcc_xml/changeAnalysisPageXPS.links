@@ -1,0 +1,427 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+# derived from https://github.com/vcgalpin/dcc-xml-temporal
+
+
+# TO DO
+# - improve analysis functions to deal with deletions
+# - merge itemCountAnalysis and analysisCount
+# - add analysis of attribute change
+
+# webpage template
+open import InspectDccXPSTemplate;
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+
+# DCC application specific
+open import DdeHandling;
+open import XmlDatabase;
+open import XmlDocumentTables;
+open import XmlXPS;
+
+# ================ TYPES =============================
+
+typename DisplayOptions = [| ShowLabels 
+                           | FlatAttributes 
+                           |];
+
+typename Mod = (ddeList:[Int], 
+                tt_from:DateTime, 
+                tt_to:DateTime, 
+                tag:String, 
+                text:String, 
+                attrs:[Attr], 
+                original:Bool);
+
+typename XmlAnalysis = (ddeList:[Int], 
+                        dde:String, 
+                        hide:Bool, 
+                        original:Bool, 
+                        mods:[Mod],
+                        insertions: Int, 
+                        deletions: Int, 
+                        changes: Int, 
+                        details: Bool,
+                        total_insertions: Int, 
+                        total_deletions: Int, 
+                        total_changes: Int);
+
+typename Model = (analysis:[XmlAnalysis], 
+                  doc_id: Int, 
+                  display:[DisplayOptions]);
+        
+typename Message =
+    [| Hide:String | Show:String | ShowChanges 
+     | ShowDetails:String | HideDetails:String
+     | HideAll | ShowAll 
+     | ShowTopTwoLevels | ShowTopThreeLevels 
+     | ShowTopFourLevels | ShowTopFiveLevels |];
+
+#============= FUNCTIONS =====================================
+
+### data manipulation functions
+
+fun performAnalysis (l) {
+  # --------
+  fun createNewRow (x) { 
+    # >>>>>>>>
+    (ddeList=x.ddeList,dde=x.dde,hide=x.hide,original=false,details=false,
+     insertions=0,changes=0,deletions=0,
+     total_insertions=0,total_changes=0,total_deletions=0,
+     mods=[(ddeList=x.ddeList,tt_from=x.tt_from,tt_to=x.tt_to,
+            tag=x.tag,text=x.text,attrs=x.attrs,original=x.original)])
+  }
+  fun transformToAnalysis (l,current_row) {
+    # --------
+    fun addModToRow (curr,x) {
+      # >>>>>>>>
+      ((curr with mods=curr.mods++[(ddeList=x.ddeList,tt_from=x.tt_from,tt_to=x.tt_to,
+                                   tag=x.tag,text=x.text,attrs=x.attrs,original=x.original)])
+             with details = true)
+    } 
+    fun sortMods (r) {
+      # >>>>>>>>
+      var m = for (x <- r.mods) orderby (x.tt_from) [x]; # row is original whenever the first
+      ((r with mods = m) with original=hd(m).original)   # mod is original
+    }
+    # >>>>>>>>  
+    switch (l) {
+      case []    -> [sortMods(current_row)]
+      case x::xs -> if (x.ddeList == current_row.ddeList)
+                      transformToAnalysis(xs,addModToRow(current_row,x))
+                    else
+                      sortMods(current_row)::transformToAnalysis(xs,createNewRow(x))
+    }
+  }
+  fun itemCountAnalysis (l) { # should be merged with analysisCount
+    # >>>>>>>>
+    switch (l) {
+      case []    -> []
+      case x::xs -> var i = if (x.original) 0 else 1;
+                    var c = length(x.mods)-1;
+                    ((x with insertions=i) with changes=c)::
+                      itemCountAnalysis(xs)
+    }
+  }
+  fun analysisCount (l,ch) { # c is a list recording children's counts
+    # --------      
+    fun addCounts (i1,c1,i2,c2,ch,l,x) {
+      # >>>>>>>>      
+      analysisCount(l,(dde=x.dde,ins=i1,chs=c1)::ch) ++
+        [((x with total_insertions=i2) with total_changes=c2)]
+      }
+    # >>>>>>>>
+    switch (l) {
+      case []    -> []
+      case x::xs -> var i = if (x.original) 0 else 1;
+                    var c = length(x.mods)-1;
+                    switch (ch) {
+                      case []         -> addCounts(i,c,i,c,[],xs,x)
+                      case y::[]      -> if (ddeParent(x.dde,y.dde))
+                                           addCounts(i+y.ins,c+y.chs,i+y.ins,c+y.chs,[],xs,x)
+                                         else 
+                                           addCounts(i,c,i,c,ch,xs,x)
+                      case y1::y2::ys -> if (ddeParent(x.dde,y1.dde) && 
+                                             ddeSibling(x.dde,y2.dde))
+                                               addCounts(i+y1.ins+y2.ins,c+y1.chs+y2.chs,
+                                                         i+y1.ins,c+y1.chs,ys,xs,x)
+                                          else if (ddeParent(x.dde,y1.dde))
+                                           addCounts(i+y1.ins,c+y1.chs,
+                                                     i+y1.ins,c+y1.chs,y2::ys,xs,x)
+                                          else addCounts(i,c,i,c,ch,xs,x)
+
+                    }    
+     }
+  }
+  # >>>>>>>>
+  var a = transformToAnalysis(tl(l),createNewRow(hd(l)));
+  analysisCount(reverse(itemCountAnalysis(a)),[])
+}
+
+### display functions
+
+fun setShowChanges (l) { # specific to change analysis
+  # --------
+  fun showUp (l,show_dde) {
+    # >>>>>>>>
+    switch (l) {
+      case []    -> []
+      case x::xs -> if (ddeAncestor(x.dde,show_dde))
+                      showUp(xs,show_dde)++[(x with hide=false)]
+                    else if (length(x.mods)==1 && x.original)
+                      showUp(xs,show_dde)++[(x with hide=true)]
+                    else
+                      showUp(xs,x.dde)++[(x with hide=false)]
+    }    
+  }
+  # >>>>>>>>
+  var b = reverse(l);
+  showUp(b,"")
+}
+
+fun setDetails (dde,l) { # specific to change analysis
+  # >>>>>>>>
+  for (x <- l) 
+    [(x with details = if (x.dde==dde) not(x.details)
+                       else (x.details))]
+}
+
+
+#============= UPDT ==========================================
+
+sig updt : (Message, Model) {}~> Model
+fun updt(msg, model) {
+  # >>>>>>>>
+  switch(msg) {
+    case Hide(d) -> 
+      (model with analysis=map(curry(updateHideShow)(d),model.analysis))
+    case Show(d) -> 
+      (model with analysis=map(curry(updateHideShow)(d),model.analysis))
+    case ShowAll -> 
+      (model with analysis=setShow(model.analysis,1000000000))
+    case HideAll -> 
+      (model with analysis=setHide(model.analysis))
+    case ShowTopTwoLevels -> 
+      (model with analysis=setShow(model.analysis,2))
+    case ShowTopThreeLevels -> 
+      (model with analysis=setShow(model.analysis,3))
+    case ShowTopFourLevels -> 
+      (model with analysis=setShow(model.analysis,4))
+    case ShowTopFiveLevels -> 
+      (model with analysis=setShow(model.analysis,5))
+    case ShowChanges -> 
+      (model with analysis=setShowChanges(model.analysis))
+    case ShowDetails(d) -> 
+      (model with analysis=setDetails(d,model.analysis))
+    case HideDetails(d) -> 
+      (model with analysis=setDetails(d,model.analysis))
+  }
+}
+
+#============= VIEW ===========================================================
+
+fun hideButton (dde) {
+  # >>>>>>>>  
+  form(class("form-inline"),
+         div(class("form-group"),
+          button(type("button") +@ class("btn btn-sm") +@
+            onClick(fun() { Hide(dde) }),unescapedTextNode(hideArrow))))
+}
+
+fun showButton (dde) {
+  # >>>>>>>> 
+  form(class("form-inline"),
+         div(class("form-group"),
+          button(type("button") +@ class("btn btn-outline btn-sm") +@
+            onClick(fun() { Show(dde) }),unescapedTextNode(showArrow))))
+}
+
+fun showDetailsButton (dde) {
+  # >>>>>>>> 
+  form(class("form-inline"),
+         div(class("form-group"),
+           button(type("button") +@ class("btn btn-blue btn-sm") +@ 
+             onClick(fun() { ShowDetails(dde) }),unescapedTextNode("Show Details"))))
+}
+
+fun hideDetailsButton (dde) {
+  # >>>>>>>> 
+  form(class("form-inline"),
+         div(class("form-group"),
+            button(type("button") +@ class("btn btn-blue btn-sm") +@ 
+              onClick(fun() { HideDetails(dde) }),unescapedTextNode("Hide Details"))))
+}
+
+fun getAttrSeparator(display,dl,sp) {
+  # >>>>>>>> 
+  if (elem(FlatAttributes,display))
+    "&nbsp;&nbsp;"
+  else
+    "<br>"^^indentWithBar(dl,sp)^^"&nbsp;&nbsp;"
+}
+
+fun labelColumnSize (display) {
+  # >>>>>>>> 
+  if (elem(ShowLabels,display))
+    th(style("width: 1em"), textNode("Label")) 
+  else h0
+}
+
+fun labelColumnValue (display,dde) {
+  # >>>>>>>> 
+  if (elem(ShowLabels,display))
+    td(a0, textNode(dde)) 
+  else h0
+}
+
+fun xmlDisplayFromAnalysisList (m,sp,label,hs) {
+  # --------
+  fun renderDocRows (l,hide_dde) {
+    # --------
+    fun renderAttrs (l,sep) {
+      # >>>>>>>> 
+      switch (l) {
+        case []    -> ""
+        case x::xs -> sep^^x.attr^^"=\""^^x.value^^"\""^^renderAttrs(xs,sep)
+      }
+    }
+    fun renderDocRow (x) {
+      # -------- 
+      # need to add attribute details
+      fun renderDetailRow (r) {
+        # >>>>>>>> 
+        tr(class("table-warning"),
+          td(a0, textNode(show(r.tt_from))) +*
+          td(a0, if (r.tag<>"") unescapedTextNode("&lt"^^r.tag^^"&gt") else textNode(r.text)) 
+        )
+      }
+      fun renderAttrDetailRow (r) {
+        # >>>>>>>> 
+        tr(class("table-warning"),
+          td(a0, textNode(show(r.tt_from))) +*
+          td(a0, textNode(r.attr^^"="^^r.value)) 
+        )
+      }
+      # >>>>>>>> 
+
+      var rows = 
+        # >>>>>>>> 
+        concatMap(renderDetailRow,reverse(x.mods)) +*
+        concatMap(renderAttrDetailRow,reverse(hd(x.mods).attrs)); 
+ 
+      var detailTable = {
+        # >>>>>>>> 
+        table_(class("table table-bordered table-sm"),
+        thead(a0,
+          tr(class("table-warning"),
+          th(style("width: 25%"), textNode("Date of modification")) +*
+          th(style("width: 75%"), h0) 
+          )) +*
+          tbody(a0, rows) +* 
+          tr(class("table-active"),td(a0,h0)+*td(a0,h0)+*td(a0,h0)))
+      };
+
+      var d = 
+        # >>>>>>>> 
+        length(ddeSep(x.dde))-1;
+
+      var s =
+        # >>>>>>>>  
+        if (last(x.mods).tag<>"") 
+indentWithBar(length(ddeSep(x.dde))-1,sp)^^"&lt"^^last(x.mods).tag^^renderAttrs(reverse(last(x.mods).attrs),getAttrSeparator(m.display,d,sp))^^"&gt "
+        else
+          indentWithBar(length(ddeSep(x.dde))-1,sp)^^last(x.mods).text;
+
+      var b = 
+        # >>>>>>>> 
+        if (last(x.mods).tag=="")
+          h0
+        else if (x.hide)
+          hideButton(x.dde)
+        else
+          showButton(x.dde);
+
+      var attr = 
+        # >>>>>>>> 
+        if (length(x.mods)==1 && x.original ) 
+          a0
+        else 
+          class("table-warning");
+      
+      tr(attr,          
+        td(a0, unescapedTextNode(s)) +*
+        td(a0, if (x.details) hideDetailsButton(x.dde) else showDetailsButton(x.dde)) +*       
+        td(a0, b) +*
+        td(a0, textNode(intToString(x.insertions)^^"  ("^^intToString(x.total_insertions)^^")")) +*
+        td(a0, textNode(intToString(x.changes)^^"  ("^^intToString(x.total_changes)^^")")) +*
+        labelColumnValue(m.display,x.dde)
+      )
+      +* (if (not(x.details)) h0 else detailTable)
+    }
+    # >>>>>>>> 
+    switch (l) {
+      case []    -> h0
+      case x::xs -> if (ddeAncestor(hide_dde,x.dde))
+                      renderDocRows(xs,hide_dde)
+                    else if (x.hide)
+                      renderDocRow(x) +* renderDocRows(xs,x.dde)
+                    else
+                      renderDocRow(x) +* renderDocRows(xs,"")
+    }   
+  }
+  # >>>>>>>> 
+  var rows = renderDocRows(m.analysis,"");
+
+  var showButtons = {
+    # >>>>>>>> 
+    unescapedTextNode("&nbsp;") +*
+      form(class("form-inline"),
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-sml btn-blue me-3 mt-3 mb-3") +@
+              onClick(fun() { ShowChanges }),textNode("Show changes")) +*
+            button(type("button") +@ class("btn btn-sml btn-blue me-3 mt-3 mb-3") +@
+              onClick(fun() { ShowAll }),textNode("Show all elements")) +*
+            button(type("button") +@ class("btn btn-sml btn-blue mt-3 mb-3") +@
+              onClick(fun() { HideAll }),textNode("Hide all elements")))
+      )
+  };
+
+  var docTable = {
+    # >>>>>>>>      
+    h5(class("card-title"),h0) +*
+    table_(class("table table-bordered table-sm"),
+    thead(a0,
+      tr(a0,
+      th(a0, textNode("Element")) +*
+      th(style("width: 7em"),h0) +*
+      th(style("width: 1em"), textNode("")) +*
+      th(style("width: 6em"), textNode("Insertions")) +*
+      th(style("width: 6em"), textNode("Changes")) +*
+      labelColumnSize(m.display)
+      )) +*
+      tbody(a0, rows))
+  }; 
+  
+  div(class("container-fluid"),
+      h4(class("title"), textNode("XML document"^^label)) +* 
+        textNode(hs) +* showButtons +* docTable)   
+}
+
+sig view : (Model) ~> MvuHTML.HTML(Message)
+fun view(model) {
+  # --------    
+  fun renderModel(model) {
+    # >>>>>>>>
+    var hs = " Model, Serial Number"^^
+             " with Pass Energy x eV on DateTime x, Version y";     
+    xmlDisplayFromAnalysisList(model,4,": change analysis",hs)
+    }
+  # >>>>>>>>
+  renderModel(model)
+}
+
+#==================== MAIN ==============================================
+
+fun mainPage() {
+  # >>>>>>>>
+  var id = switch (lookup("doc_id", environment())) {
+             case Just(id)  -> if (isInt(id)) stringToInt(id) else -1
+             case Nothing   -> -1
+           };              
+  if (id <> -1) {  
+    var s = performAnalysis(getAllNodesAndAttrsWithIDTables(id,getTableNames(id)));
+    var initialModel = (analysis=setShowChanges(s), doc_id=id,
+                        display=[ShowLabels]); 
+    runSimple("placeholder", initialModel, view, updt);
+    template("?doc_id="^^intToString(id))
+  } else page <html>Missing doc_id?</html>
+}

@@ -1,0 +1,13 @@
+# original author: Vashti Galpin (Vashti.Galpin@ed.ac.uk)
+# created: 2025-01-25
+#
+# module for startXPS.links
+#
+# defines the PostgreSQL database to be used for the XPS tables
+# - this database may or may not be the same as the database for the XML data
+#
+# called by DatabaseXPS module 
+#
+# update name as appropriate 
+
+var db = database "xps_dcc";

@@ -1,0 +1,53 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# contains useful xml function and variable definitions specific to the XPS DCC curator
+
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+
+# ============================ variables definitions
+
+var hideArrow = "&#8744;";
+var showArrow = "&#8743;";
+
+var whSpace = unescapedTextNode("&nbsp;&nbsp;"); # also defined in xmlDisplay?
+
+# ============================ button functions
+
+  fun toggleButton(fn, text) {
+    # >>>>>>>>
+    button(type("button btn-openclose") +@ class("btn btn-openclose") +@
+      onClick(fun() { fn }), unescapedTextNode(text))
+  }                 
+
+  fun availButton (fn,txt) {
+    # >>>>>>>>
+    button(type("button") +@ class("btn btn-sm btn-blue me-3") +@ 
+      onClick(fun() { fn }),txt)
+  }
+
+  fun unavailButton (txt) {
+    # >>>>>>>>
+    button(type("button") +@ class("btn btn-sm btn-blue me-3") +@ 
+      attr("disabled", "disabled") +@
+      onClick(fun() { NotCurrentlyUsed }),txt)
+  }
+
+  fun unimplButton (txt) {
+    # >>>>>>>>
+    button(type("button") +@ class("btn btn-sm btn-notimpl me-3") +@ 
+      attr("disabled", "disabled") +@ 
+      onClick(fun() { NotCurrentlyUsed }),txt)
+  }
+
+  fun showHideButton (fn, txt) {
+    # >>>>>>>>
+    button(type("button") +@ class("btn btn-sm btn-blue ms-3 mb-1") +@
+      onClick(fun() { fn }), txt)
+  }
+

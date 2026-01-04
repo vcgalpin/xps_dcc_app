@@ -1,0 +1,326 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+#
+# module for startXPS.links
+#
+# provides a web page to view all instruments with their calibrations (this list can be hidden 
+# or shown) together with options to see details of a specific calibration, or to compare the 
+# calibrations of a specific instrument
+
+# webpage template
+open import MainXPSTemplate;
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import GeneralXPS;
+open import XmlXPS;
+
+#================ TYPES =============================
+
+typename Model = (instrs: [Instrument]);
+
+typename Message = [| NotCurrentlyUsed |
+                      ToggleDetails: Int | 
+                      GotoCalibrations: Int |
+                      GotoComparison: Int |
+                      CalibrationsOverview |];
+
+
+#============= FUNCTIONS ==============================
+
+#== database functions
+
+fun getInstrumentLines(id) {
+  # >>>>>>>>
+  query nested {
+    for (il <-- instrumentLine)
+      where (il.instrumentid == id)
+      [(calGroups=[] | il)]
+  }
+}
+
+fun getCalibrationSets(id) {
+  # >>>>>>>>
+  query nested {
+    for (ic <-- calibrationSet)
+      where (ic.instrumentid == id)
+      [(calibrationEvents = [] | ic)]
+  }
+}
+
+# this function reorders the instruments and is purely for demo purposes
+fun reorderInstrs(instr) {
+  # >>>>>>>>
+  drop(5, take(6, instr)) ++ drop(3, take(5, instr)) ++ drop(6, instr) ++ take(3, instr)
+}
+
+fun getInstrumentsAndInstrumentLines() {
+  # >>>>>>>>
+  var instrs = 
+    query nested { 
+      for (i <-- instrument) [i]
+    };
+  reorderInstrs(  # this call is for demo purposes only and can be removed
+    for (i <- instrs)
+      [switch(i.status) {
+        case 1 -> 
+          (showdetails = true | 
+          (calibrationSets = [] | 
+          (instrLines = getInstrumentLines(i.id) | i)))
+        case 2 -> 
+          (showdetails = true | 
+          (calibrationSets = getCalibrationSets(i.id) | 
+          (instrLines = [] | i)))
+        case _ -> error("Instrument status not known: "^^intToString(i.status))
+      }] 
+  )
+}
+
+#== display functions
+
+fun updateShowDetails(model, id) {
+  # >>>>>>>>
+  for (x <- model)
+    if (x.id == id)
+      [(x with showdetails=not(x.showdetails))]
+    else
+      [x]
+}
+
+fun sortByVersion(l) {
+  # >>>>>>>>
+  fun versionNumber(a) {
+    a.versionnumber
+  }
+  sortBy(versionNumber, l)
+}
+
+#============= UPDT ===================================
+
+sig updt : (Message, Model) {}~> Model
+fun updt(msg, model) {
+  # >>>>>>>>
+  switch(msg) {
+    case GotoCalibrations(id) -> 
+      redirect("/gotoCalibrations?ilcs_id="^^intToString(id));
+      model
+    case GotoComparison(id) -> 
+      redirect("/gotoComparison?instr_id="^^intToString(id));
+      model
+    case ToggleDetails(id) -> 
+      (model with instrs=updateShowDetails(model.instrs,id))
+    case NotCurrentlyUsed -> 
+      model
+    case CalibrationsOverview -> 
+      redirect("/gotoOverview");
+      model
+  }
+}
+
+
+#============= VIEW ===================================
+
+sig view : (Model) ~> MvuHTML.HTML(Message)
+
+fun view(model) {
+  # --------
+
+  #== buttons that affect the whole page
+
+  var globalButtons = 
+    # >>>>>>>>
+    div(class("form-inline"),
+      unimplButton(textNode("Add Instrument")) +* 
+      availButton(CalibrationsOverview, textNode("Calibrations Overview"))
+  );
+
+  #== buttons for instrument and calibration
+
+  fun instrButtons(id) {
+    # >>>>>>>>
+    div(class("form-inline"),
+      unimplButton(textNode("View Instrument")) +* 
+      unimplButton(textNode("New Calibration")) +*
+      availButton(GotoComparison(id),textNode("Calibration Overview"))
+    )
+  }
+
+  fun statusButtons(s, id) {
+    # >>>>>>>>
+    switch(s) {
+      case 1  ->  # NEW
+                  # files not uploaded, but can be, if implemented
+                  # no calculation is possible 
+                  # no calibrations exist
+        div(class("form-inline"),
+          unimplButton(textNode("Files")) +* 
+          unavailButton(textNode("Calculate")) +* 
+          unavailButton(textNode("Calibrations"))
+        )
+      case 2  ->  # IN PROGRESS
+                  # files have been uploaded, and can be replaced(?) if implemented
+                  # calculation is possible, if implemented 
+                  # no calibrations exist
+        div(class("form-inline"),
+          unimplButton(textNode("Files")) +* 
+          unimplButton(textNode("Calculate")) +* 
+          unavailButton(textNode("Calibrations"))
+        )
+      case 3  ->  # CALIBRATED
+                  # files have been uploaded, but can be replaced(?) if implemented
+                  # calculation has been done so not possible to do again?
+                  # calibrations exist
+        div(class("form-inline"),
+          unimplButton(textNode("Files")) +* 
+          unavailButton(textNode("Calculate")) +* 
+          availButton(GotoCalibrations(id), textNode("Calibrations"))
+        )
+      case 4  ->  # DCC
+                  # only applies to DCCs in temporal database
+                  # calibrations exist
+                  # portal operations may be available but are not implemented
+        div(class("form-inline"),
+          unimplButton(textNode("Files")) +* 
+          unimplButton(textNode("Calculate")) +* 
+          availButton(GotoCalibrations(id), textNode("Calibrations"))
+        )
+      case _  ->  # UNKNOWN
+                  # all operations are unavailable
+        div(class("form-inline"),
+          unavailButton(textNode("Files")) +* 
+          unavailButton(textNode("Calculate")) +* 
+          unavailButton(textNode("Calibrations"))
+        )
+    }
+  }
+
+  fun statusText(i) {
+    # >>>>>>>>
+    switch(i) {
+      case 1 -> "New"
+      case 2 -> "In progress"
+      case 3 -> "Calibrated"
+      case 4 -> "DCC"
+      case _ -> "Unknown"
+    }
+  }
+
+  fun renderInstrLines(showdetails, d) {
+    # --------
+    fun renderInstrLine(x) {
+      # >>>>>>>
+      tr(a0,
+        td(style("width: 350px"), h0) +*
+        td(style("width: 150px"), textNode(statusText(x.status))) +*
+        td(style("width: 200px"), textNode(dateTimePrint(x.calibrationdate))) +* 
+        td(style("width: 70px") +@ 
+          attr("align", "center"),textNode(intToString(x.versionnumber))) +*  
+        td(style("width: 450px"), statusButtons(x.status, x.id))
+      )
+    }
+    # >>>>>>>>
+    if (not(showdetails) || d == [])
+      h0
+    else renderInstrLine(hd(d)) +* renderInstrLines(showdetails, tl(d))
+  }
+
+  fun renderCalibrationSets(showdetails, d) {
+    # --------
+    fun renderCalibrationSet(x) {
+      # >>>>>>>
+      tr(a0,
+        td(style("width: 350px"), h0) +*
+        td(style("width: 150px"), textNode(statusText(x.status))) +*
+        td(style("width: 200px"), textNode(dateTimePrint(x.calibrationdate))) +*
+        td(style("width: 70px") +@ 
+          attr("align", "center"), textNode(intToString(x.versionnumber))) +*  
+        td(style("width: 455px"), statusButtons(x.status, x.id))
+      )
+    }
+    # >>>>>>>>
+    if (not(showdetails) || d == [])
+      h0
+    else renderCalibrationSet(hd(d)) +* renderCalibrationSets(showdetails, tl(d))
+  }
+
+  fun renderInstrRows(l) {  
+    # --------
+    fun renderInstrRow(x) { 
+      # >>>>>>>
+      var opencloseButton = 
+        if (x.showdetails) 
+          toggleButton(ToggleDetails(x.id), showArrow^^nSp(6)^^x.model^^", "^^x.serialnumber) 
+        else 
+          toggleButton(ToggleDetails(x.id), hideArrow^^nSp(6)^^x.model^^", "^^x.serialnumber);
+      tr(a0,
+        td(style("width: 350px"), opencloseButton) +*
+        td(style("width: 220px"), textNode("")) +* 
+        td(style("width: 200px"), textNode("")) +*
+        td(style("width: 455px"), instrButtons(x.id))
+      ) +* 
+      (if (x.instrLines == [] && x.calibrationSets == [])
+        h0
+      else if (x.instrLines <> [])
+        renderInstrLines(x.showdetails, sortByVersion(x.instrLines))
+      else if (x.calibrationSets <> [])
+        renderCalibrationSets(x.showdetails, sortByVersion(x.calibrationSets))
+      else # if (x.instrLines <> [] && x.calibrationSets <> [])
+        error("Only one list should contain calibration information"))
+    }
+    # >>>>>>>>
+    switch(l) {
+      case []    -> h0
+      case x::xs -> renderInstrRow(x) +* renderInstrRows(xs)
+    }   
+  }
+
+  var instrTable = {
+    if (model.instrs == [])
+      unescapedTextNode("<br><br> There are no instruments available. Please add an instrument")
+    else {
+      var tableContent = 
+        table_(class("table table-sm scrolldown"),
+          tbody(a0, renderInstrRows(model.instrs)));
+      
+      table_(class("table table-sm table-bordered align-middle contains-scrolldown"),
+        tbody(a0,
+          tr(a0, 
+            td(style("width: 350px"), textNode("Instrument")) +*
+            td(style("width: 150px"), textNode("Status")) +*
+            td(style("width: 200px"), textNode("Calibrated")) +*
+            td(style("width: 70px"), textNode("Version")) +*
+            td(style("width: 460px"), textNode("Actions"))
+          ) +*
+          tr(a0, 
+            td(style("colspan: 5"), tableContent)
+          ) +*
+          tr(a0,  
+            td(class("td-alignright") +@ style("colspan: 5") +@ style("width: 1230px"), 
+               unescapedTextNode("Total rows: "^^intToString(length(model.instrs))^^nSp(4)))
+          )
+        )
+      )       
+    }
+  };
+  div(class("container-fluid"), h4(a0, textNode("Instruments") +* globalButtons) +* 
+    instrTable +* globalButtons)
+}
+
+#========================= MAIN =================================
+
+fun mainPage() {
+  # >>>>>>>>
+  runSimple("placeholder", (instrs = getInstrumentsAndInstrumentLines()), view, updt);
+  template()
+}

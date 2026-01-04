@@ -1,0 +1,403 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+# derived from https://github.com/vcgalpin/dcc-xml-temporal
+
+# webpage template
+open import ComparisonXPSTemplate;
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+
+# XML specific
+open import XmlDocumentTables;
+open import DdeHandling;
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import XmlXPS;
+
+# ================ TYPES =============================
+
+typename XmlCompare = (dde:String,
+                       match:Bool,
+                       str1:String,
+                       str2:String,
+                       hide:Bool,
+                       ddeList:[Int]);
+
+typename Info = (calibrationdate:DateTime,
+                 model:String,
+                 orderid:String,
+                 passenergy:Float,
+                 serialnumber:String,
+                 timeslice:DateTime,
+                 versionnumber:Int);
+
+typename Model = (date1:DateTime, 
+                  date2:DateTime, 
+                  doc_id1: Int, 
+                  doc_id2: Int,
+                  cmps:[XmlCompare], 
+                  ready:Bool, 
+                  info1: Info, 
+                  info2: Info);
+        
+typename Message =
+    [| EnterDate1:String | EnterDate2:String | CompareVersions | HideAll |
+       Hide:String | Show:String | ShowChanges | ShowAll | 
+       ShowTopTwoLevels | ShowTopThreeLevels | ShowTopFourLevels | ShowTopFiveLevels |];
+
+#============ FUNCTIONS ==================================
+
+fun renderTagOrText (x) {
+  # -------
+  fun renderAttrs (l) {
+    # >>>>>>>>
+    switch (l) {
+      case []    -> ""
+      case x::xs -> " "^^x.attr^^"=\""^^x.value^^"\""^^renderAttrs(xs)
+    }
+  }
+  # >>>>>>>
+  if (x.tag<>"" && x.text<>"")
+     error("both tag and text are non-empty strings")
+  else if (x.text<>"")
+     indentWithBar(length(ddeSep(x.dde))-1,2)^^x.text
+  else
+     indentWithBar(length(ddeSep(x.dde))-1,2)^^" &lt"^^x.tag^^renderAttrs(x.attrs)^^"&gt "
+}
+
+fun createCompareList (l1,l2) {
+  # -------
+  fun addBothItems(i1,i2) {
+    # >>>>>>>>
+    var s1 = renderTagOrText(i1);
+    var s2 = renderTagOrText(i2);
+    if (s1==s2) {
+      (dde=i1.dde,match=true,str1=s1,str2=s2,ddeList=ddeSep(i1.dde),hide=false)
+    } else {
+      (dde=i1.dde,match=false,str1=s1,str2=s2,ddeList=ddeSep(i1.dde),hide=false)
+    }
+  }
+  fun addLeftItems(l) {
+    # >>>>>>>>
+    switch (l) {
+       case []    -> []
+       case x::xs -> (dde=x.dde,match=false,str1=renderTagOrText(x),str2="",ddeList=ddeSep(x.dde),hide=false)::
+                      addLeftItems(xs)
+    }
+  }
+  fun addRightItems(l) {
+    # >>>>>>>>
+    switch (l) {
+      case []    -> []
+      case x::xs -> (dde=x.dde,match=false,str1="",str2=renderTagOrText(x),ddeList=ddeSep(x.dde),hide=false)::
+                     addRightItems(xs)
+    }
+  }
+  # >>>>>>>>
+  switch (l1) {
+    case []      -> if (l2==[]) [] else addRightItems(l2)
+    case x1::xs1 -> switch (l2) {
+                      case []      -> addLeftItems(l2)
+                      case x2::xs2 -> if (x1.dde==x2.dde)
+                                        addBothItems(x1,x2)::createCompareList(xs1,xs2)
+                                      else if (ddeOrderFast(ddeSep(x1.dde),ddeSep(x2.dde))) # fix this
+                                        addLeftItems([x1])++createCompareList(xs1,l2)
+                                      else
+                                        addRightItems([x2])++createCompareList(l1,xs2)
+                    }
+  }
+}
+
+fun getComparison (model) server {
+  # >>>>>>>>
+  var tnames1 = getTableNames(model.doc_id1);
+  var tnames2 = getTableNames(model.doc_id2);
+  var d1 = getNodesAndAttrsAtTimeWithIDTables(model.date1,model.doc_id1,tnames1);
+  var d2 = getNodesAndAttrsAtTimeWithIDTables(model.date2,model.doc_id2,tnames2);
+  createCompareList(d1,d2)
+} 
+
+fun setShowChanges (l) { # specific to comparison
+  # ---------
+  fun showUp (l,show_dde) {
+    # >>>>>>>>
+    switch (l) {
+      case []    -> []
+      case x::xs -> if (ddeAncestor(x.dde,show_dde))
+                      showUp(xs,show_dde)++[(x with hide=false)]
+                    else if (x.match)
+                      showUp(xs,show_dde)++[(x with hide=true)]
+                    else
+                      showUp(xs,x.dde)++[(x with hide=false)]
+    }    
+  }
+  # >>>>>>>>
+  var b = reverse(l);
+  showUp(b,"")
+}
+
+#============= UPDT ================================
+
+sig updt : (Message, Model) {}~> Model
+fun updt(msg, model) {
+  # >>>>>>>>
+  switch(msg) {
+    case EnterDate1(d) -> 
+      (model with date1=parseDate(d))
+    case EnterDate2(d) -> 
+      (model with date2=parseDate(d))
+    case CompareVersions -> 
+      ((model with cmps=getComparison(model)) with ready=true)
+    case Hide(d) -> 
+      (model with cmps=map(curry(updateHideShow)(d),model.cmps))
+    case Show(d) -> 
+      (model with cmps=map(curry(updateHideShow)(d),model.cmps))
+    case HideAll -> 
+      (model with cmps=setHide(model.cmps))
+    case ShowAll -> 
+      (model with cmps=setShow(model.cmps,999999999))
+    case ShowTopTwoLevels -> 
+      (model with cmps=setShow(model.cmps,2))
+    case ShowTopThreeLevels -> 
+      (model with cmps=setShow(model.cmps,3))
+    case ShowTopFourLevels -> 
+      (model with cmps=setShow(model.cmps,4))
+    case ShowTopFiveLevels -> 
+      (model with cmps=setShow(model.cmps,5))
+    case ShowChanges -> 
+      (model with cmps=setShowChanges(model.cmps))
+  }
+}
+
+#============= VIEW ==================================
+
+sig view : (Model) ~> MvuHTML.HTML(Message)
+fun view(model) {
+  # >>>>>>>>
+  fun hideButton (dde) {
+    # >>>>>>>>
+    form(class("form-inline"),
+           div(class("form-group"),
+            button(type("button") +@ class("btn btn-sm") +@
+              onClick(fun() { Hide(dde) }),unescapedTextNode(hideArrow))))
+  }
+  fun showButton (dde) {
+    # >>>>>>>>
+    form(class("form-inline"),
+           div(class("form-group"),
+            button(type("button") +@ class("btn btn-outline btn-sm") +@
+              onClick(fun() { Show(dde) }),unescapedTextNode(showArrow))))
+  }
+  var showButtons_old = {
+      # >>>>>>>>
+      unescapedTextNode("&nbsp;"
+      ) +*
+      form(class("form-inline"),      
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { ShowChanges }),textNode("Show changes"))) +* whSpace +*
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { ShowAll }),textNode("Show all elements")))
+      ) +*
+      unescapedTextNode("&nbsp;"
+      ) +*
+      form(class("form-inline"),
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@ #MvuAttrs.attr("disabled", "disabled") +@
+              onClick(fun() { HideAll }),textNode("Hide all elements"))) +* whSpace +*
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { ShowTopTwoLevels }),textNode("Show two levels"))) +* whSpace +*
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { ShowTopThreeLevels }),textNode("Show three levels"))) +* whSpace +*
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { ShowTopFourLevels }),textNode("Show four levels")))  +* whSpace +*
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-primary") +@
+              onClick(fun() { ShowTopFiveLevels }),textNode("Show five levels")))
+      )
+  };
+  var showButtons = {
+      # >>>>>>>>
+      unescapedTextNode("&nbsp;"
+      ) +*
+      form(class("form-inline"),
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-sml btn-blue me-3 mt-3 mb-3") +@
+              onClick(fun() { ShowChanges }),textNode("Show changes")) +*
+            button(type("button") +@ class("btn btn-sml btn-blue me-3 mt-3 mb-3") +@
+              onClick(fun() { ShowAll }),textNode("Show all elements")) +*
+            button(type("button") +@ class("btn btn-sml btn-blue mt-3 mb-3") +@
+              onClick(fun() { HideAll }),textNode("Hide all elements")))
+      )
+  };
+
+  fun comparisonDisplay (model) {
+    # --------
+    fun renderDisplayRows(l,hide_dde) {
+      # --------
+      fun renderDisplayRow(x) {          
+        # >>>>>>>>
+        var b = if (x.hide)
+                  hideButton(x.dde)
+                else
+                  showButton(x.dde);
+        var attr = if (x.match) a0
+                   else class("table-warning");      
+        tr(attr,
+          td(a0, unescapedTextNode(x.str1)) +*
+          td(a0, b) +*
+          td(a0, unescapedTextNode(x.str2)) 
+        )
+      }
+      # >>>>>>>>
+      switch (l) {
+        case []    -> h0
+        case x::xs -> if (ddeAncestor(hide_dde,x.dde))
+                        renderDisplayRows(xs,hide_dde)
+                      else if (x.hide)
+                        renderDisplayRow(x) +* renderDisplayRows(xs,x.dde)
+                      else
+                        renderDisplayRow(x) +* renderDisplayRows(xs,"")
+      }       
+    }
+    # >>>>>>>>
+    var rows = renderDisplayRows(model.cmps,"");
+    var docTable = {
+      if (model.cmps==[])
+        h5(class("card-title"),unescapedTextNode("<br><br>The document has no content at "^^show(model.date1)^^" and "^^show(model.date2)))
+      else {     
+        h5(class("card-title"),h0) +*
+          table_(class("table table-bordered table-sm"),
+            thead(a0,
+              tr(a0,
+                th(style("width: 49%"), textNode(show(model.date1))) +*
+                th(style("width: 2%"), textNode("")) +*
+                th(style("width: 49%"), textNode(show(model.date2))) 
+        )) +*
+        tbody(a0, rows))
+     }
+  };
+
+  var hs1 = model.info1.model^^", "^^model.info1.serialnumber^^
+                " with Pass Energy "^^floatToString(model.info1.passenergy)^^
+                " eV on "^^datePrint(model.info1.calibrationdate)^^
+                ", Version "^^intToString(model.info1.versionnumber);
+  var hs2 = model.info2.model^^", "^^model.info2.serialnumber^^
+                " with Pass Energy "^^floatToString(model.info2.passenergy)^^
+                " eV on "^^datePrint(model.info2.calibrationdate)^^
+                ", Version "^^intToString(model.info2.versionnumber);
+   
+  div(class("container-fluid"),
+      h4(class("title"), textNode("XML document comparison:")) 
+      +* h5(class("title"), textNode(hs1)) 
+      +* h5(class("title"), textNode("and"))
+      +* h5(class("title"), textNode(hs2)) 
+      +* showButtons +* docTable)   
+  }
+  # >>>>>>>>
+  var dateForm = {
+    form(class("form-inline"),
+      div(class("form-group"),
+        label(for_("firstdate"),
+          textNode("Enter first date")) +*
+          input(type("text") +@
+          class("form-control mx-sm-3") +@
+          id("firstdate") +@
+          value(show(model.date1)) +@
+          onInput(fun(x) { EnterDate1(x) }), h0)) +*
+      div(class("form-group"),
+        label(for_("seconddate"),
+          unescapedTextNode("&nbsp &nbsp Enter second date")) +*
+          input(type("text") +@
+          class("form-control mx-sm-3") +@
+          id("seconddate") +@
+          value(show(model.date2)) +@
+          onInput(fun(x) { EnterDate2(x) }), h0)) +*
+      div(class("form-group"),
+        button(type("button") +@ class("btn btn-primary") +@
+          enabledAttr +@ onClick(fun() { CompareVersions }),textNode("Compare")))
+    )
+  };
+  if (not(model.ready))
+    div(class("container-fluid"),dateForm)
+  else
+    comparisonDisplay(model)
+}
+
+#============= MAIN ===========================
+
+fun dateClean(d) {
+  # >>>>>>>>>
+  strsub(d,0,19) # doesn't deal with timezone correctly!
+}
+
+fun mainPage() {
+  # >>>>>>>>>
+  var id1 = switch (lookup("doc_id1", environment())) {
+              case Just(id)  -> if (isInt(id)) stringToInt(id) else -1
+              case Nothing   -> -1
+            }; 
+  var id2 = switch (lookup("doc_id2", environment())) {
+              case Just(id)  -> if (isInt(id)) stringToInt(id) else -1
+              case Nothing   -> -1
+            }; 
+  var d1 = switch (lookup("d1", environment())) {
+             case Just(d)  -> d
+             case Nothing  -> ""
+           };    
+  var d2 = switch (lookup("d2", environment())) {
+             case Just(d)  -> d
+             case Nothing  -> ""
+           };         
+         
+  if (id1 <> -1 && id2 <> -1) {
+    var s1 = if (d1 == "")
+               parseDate("2023-08-26 16:23:48") # set a convenient date for date choice
+             else 
+               parseDate(dateClean(d1));
+    var s2 = if (d2 == "")
+               parseDate("2023-08-27 16:29:06") # set a convenient date for date choice
+             else 
+               parseDate(dateClean(d2));
+    var ready = if (d1 <> "" && d2 <> "") true
+                else false;
+    var cmps = if (ready)
+                 getComparison((date1=s1,date2=s2,cmps=[],doc_id1=id1,doc_id2=id2,ready=ready))
+               else
+                 [];
+
+    # get instrument and calibration information
+    var info = 
+      query nested {
+        for (instr <-- instrument)
+          for (cs <-- calibrationSet)
+            for (ce <-- calibrationEvent)
+              where ((id1 == ce.doc_id || id2 == ce.doc_id) && 
+                      ce.calibrationsetid == cs.id &&
+                      cs.instrumentid == instr.id)       
+                [(model=instr.model, serialnumber=instr.serialnumber,
+                  calibrationdate = cs.calibrationdate, versionnumber=cs.versionnumber,
+                  orderid=ce.orderid, passenergy=ce.passenergy, timeslice=ce.timeslice)]
+      };          
+    var initialModel = (date1 = s1, date2 = s2, cmps=setShowChanges(cmps), doc_id1=id1, doc_id2=id2, ready=ready,
+                        info1 = hd(info), info2 = last(info));  
+    runSimple("placeholder", initialModel, view, updt);
+    template("?doc_id="^^intToString(id1))
+  } 
+    else page <html>Missing doc_id?</html>
+}

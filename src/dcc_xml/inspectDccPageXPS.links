@@ -1,0 +1,243 @@
+# original author: Vashti Galpin 
+#  Vashti.Galpin@ed.ac.uk 
+#  https://github.com/vcgalpin
+
+# derived from https://github.com/vcgalpin/dcc-xml-temporal
+
+# mvu library
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+# updt and view functions for MVU defined after types and functions
+
+# general
+open import StringUtils;
+
+# template
+open import InspectDccXPSTemplate;
+
+# XML specific
+open import XmlDocumentTables;
+open import DdeHandling;
+
+# XPS application specific
+open import DatabaseXPS;
+open import TypesXPS;
+open import XmlXPS;
+
+# ================ TYPES =============================
+
+typename DisplayOptions = [| ShowLabels 
+                           | FlatAttributes |]; # all attributes on one line, default is with linebreaks
+
+typename XmlList = (dde:String,
+                    ddeList:[Int],
+                    hide:Bool,
+                    original:Bool,
+                    path:String,
+                    path_id:Int,tag:String,text:String, 
+                    tt_from:DateTime,
+                    tt_to:DateTime, 
+                    attrs: [Attr]);
+
+typename Info = (calibrationdate:DateTime,
+                 model:String,
+                 orderid:String,
+                 passenergy:Float,
+                 serialnumber:String,
+                 timeslice:DateTime,
+                 versionnumber:Int);
+
+typename Model = (info: Info, 
+                  doc_id: Int, 
+                  nodes:[XmlList], 
+                  display:[DisplayOptions]);
+
+typename Message = [| Hide:String | Show:String | Toggle:String 
+                    | ShowAll | HideAll | ShowMainLevels |];
+
+#============= FUNCTIONS ================================
+
+
+fun callGetNodesAndAttrsAtTimeWithIDTables (s,id,tnames) server { 
+  # >>>>>>>>
+  getNodesAndAttrsAtTimeWithIDTables(parseDate(s),id,tnames)
+}
+
+#============= UPDT =====================================
+
+sig updt : (Message, Model) {}~> Model
+fun updt(msg, model) {
+  # >>>>>>>>
+  switch(msg) {
+    case Hide(d) -> 
+      (model with nodes=map(curry(updateHideShow)(d),model.nodes))
+    case Show(d) -> 
+       (model with nodes=map(curry(updateHideShow)(d),model.nodes))
+    case Toggle(d) -> 
+       (model with nodes=map(curry(updateHideShow)(d),model.nodes))
+    case ShowAll -> 
+       (model with nodes=setShow(model.nodes,9999999))
+    case HideAll -> 
+       (model with nodes=setHide(model.nodes))
+    case ShowMainLevels -> (model with nodes=setShow(model.nodes,3))
+  }
+}
+
+#============= VIEW ======================================
+
+sig view : (Model) ~> MvuHTML.HTML(Message)
+fun view(model) {
+  # --------
+  fun indentWithDashes (s,n) {
+    # >>>>>>>>
+    if (s==0)
+      ""
+    else
+      unwords(replicate(s,"&nbsp"^^unwords(replicate(n-2,"&nbsp"))))
+    }
+
+  fun toggleButton (dde,text) {
+    # >>>>>>>>
+    form(class("form-inline"),
+           div(class("form-group"),
+            button(type("button") +@ class("btn btn-sm text-start") +@
+              onClick(fun() { Hide(dde) }),unescapedTextNode(text))))
+  }
+
+  fun hideButton (dde) {
+    # >>>>>>>>
+    form(class("form-inline"),
+           div(class("form-group"),
+            button(type("button") +@ class("btn btn-sm") +@
+              onClick(fun() { Hide(dde) }),unescapedTextNode(hideArrow))))
+  }
+
+  fun showButton (dde) {
+    # >>>>>>>>
+    form(class("form-inline"),
+           div(class("form-group"),
+            button(type("button") +@ class("btn btn-outline btn-sm") +@
+              onClick(fun() { Show(dde) }),unescapedTextNode(showArrow))))
+  }
+
+  fun getAttrSeparator(display,dl,sp) {
+    # >>>>>>>>
+    if (elem(FlatAttributes,display))
+      "&nbsp;&nbsp;"
+    else
+      "<br>"^^indentWithDashes(dl,sp)
+  }
+
+  fun xmlDisplayFromNodeList (m,sp,label) {
+    # --------
+    fun renderDocRows (l,hide_dde) {
+      # --------
+      fun renderAttrs (l,sep) {
+        # >>>>>>>>
+        switch (l) {
+          case []    -> ""
+          case x::xs -> sep^^indent(2,1)^^x.attr^^"=\""^^x.value^^"\""^^renderAttrs(xs,sep)
+        }
+      }
+      fun renderDocRow(x) {
+        # >>>>>>>>
+        var d = length(ddeSep(x.dde))-1;
+        var bt = if (x.tag=="")
+                  "&nbsp"
+                else if (x.hide)
+                  hideArrow
+                else
+                  showArrow; 
+        var s = if (x.tag<>"") 
+                bt^^"&nbsp;&nbsp;"^^indentWithDashes(d,sp)^^                 "&lt"^^x.tag^^renderAttrs(reverse(x.attrs),getAttrSeparator(m.display,d,sp))^^"&gt "
+                else
+                  bt^^indentWithDashes(d,sp)^^x.text;
+        var b = if (x.tag=="")
+                  h0
+                else if (x.hide)
+                  showButton(x.dde)
+                else
+                  hideButton(x.dde);                
+        tr(a0,
+          #td(a0, b) +*
+          td(a0, toggleButton(x.dde,s))
+        )
+      }
+    # >>>>>>>>
+    switch (l) {
+      case []    -> h0
+      case x::xs -> if (ddeAncestor(hide_dde,x.dde))
+                      renderDocRows(xs,hide_dde)
+                    else if (x.hide)
+                      renderDocRow(x) +* renderDocRows(xs,x.dde)
+                    else
+                      renderDocRow(x) +* renderDocRows(xs,"")
+    }   
+  }
+  # >>>>>>>>
+  var showButtons = {
+    unescapedTextNode("&nbsp;"
+      ) +*
+      form(class("form-inline"),
+        div(class("form-group"),
+            button(type("button") +@ class("btn btn-sml btn-blue me-3 mt-3 mb-3") +@
+              onClick(fun() { ShowMainLevels }),textNode("Show main sections")) +*
+            button(type("button") +@ class("btn btn-sml btn-blue me-3 mt-3 mb-3") +@
+              onClick(fun() { ShowAll }),textNode("Show all elements")) +*
+            button(type("button") +@ class("btn btn-sml btn-blue mt-3 mb-3") +@
+              onClick(fun() { HideAll }),textNode("Hide all elements")))
+    )
+  };
+  var docTable = {
+    if (m.nodes==[])
+      h5(class("card-title"),unescapedTextNode("<br><br>The document has no contents"))
+    else {
+      var rows = renderDocRows(m.nodes,"");     
+      h5(class("card-title"),h0) +*
+      table_(class("table table-bordered table-sm"),
+        tbody(a0, rows))
+      }
+    };  
+    div(class("container-fluid"),
+        h4(class("title"), textNode("XML document"^^label)) +* showButtons +* docTable)   
+  }
+  # >>>>>>>> 
+  var hs = ": Calibration of "^^model.info.model^^", "^^model.info.serialnumber^^
+           " with Pass Energy "^^floatToString(model.info.passenergy)^^
+           " eV on "^^datePrint(model.info.calibrationdate)^^
+           ", Version "^^intToString(model.info.versionnumber);
+  div(class("container-fluid"),
+    xmlDisplayFromNodeList(model,6,hs)
+  )
+}
+
+#============= MAIN =======================================
+
+fun mainPage(d) {
+  # >>>>>>>>
+  var id = switch (lookup("doc_id", environment())) {
+             case Just(id)  -> if (isInt(id)) stringToInt(id) else -1
+             case Nothing   -> -1
+           }; 
+  if (id <> -1) {  
+    # get instrument and calibration information
+    var info = 
+      query nested {
+        for (instr <-- instrument)
+          for (cs <-- calibrationSet)
+            for (ce <-- calibrationEvent)
+              where (id == ce.doc_id && 
+                     ce.calibrationsetid == cs.id &&
+                     cs.instrumentid == instr.id)       
+                [(model=instr.model, serialnumber=instr.serialnumber,
+                  calibrationdate = cs.calibrationdate, versionnumber=cs.versionnumber,
+                  orderid=ce.orderid, passenergy=ce.passenergy, timeslice=ce.timeslice)]
+      };                 
+    var initialModel = (info=hd(info),doc_id=id,nodes=getNodesAndAttrsAtTimeWithIDTables(hd(info).timeslice,
+                        id,getTableNames(id)),display = [ShowLabels,FlatAttributes] );
+    runSimple("placeholder", (initialModel with nodes=setShow(initialModel.nodes,3)), view, updt);
+    template("?doc_id="^^intToString(id))
+  } 
+  else page <html>Missing doc_id?</html>
+}
