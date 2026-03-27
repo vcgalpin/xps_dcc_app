@@ -10,4 +10,4 @@
 #
 # update name as appropriate
 
-var db = database "xps_dcc";
+var db = database "linksdb";
