@@ -9,5 +9,6 @@
 # called by DatabaseXPS module 
 #
 # update name as appropriate
+#
 
 var db = database "linksdb";
