@@ -32,14 +32,12 @@ var tables =
   )};  
 
 # dictionary structure for table variables
-# [(String, (attr:TemporalTable(...), node:TemporalTable(...), path:TemporalTable(...)) 
-#  )]
+# [(String, (attr:TemporalTable(...), node:TemporalTable(...)) )]
 
 var table_id_assoc = 
   for (x <- tables)
     [(x.table_id,
       (node = createNodeTable(x.table_id),
-       attr = createAttrTable(x.table_id),
-       path = createPathTable(x.table_id))
+       attr = createAttrTable(x.table_id))
     )]; 
 

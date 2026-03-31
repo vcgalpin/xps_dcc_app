@@ -40,16 +40,3 @@ fun createAttrTable (name) {
   from db
 }
 
-fun createPathTable (name) {
-  # >>>>>>>>
-  table "xml_path_"^^name
-    with (doc_id: Int,
-          path_id: Int,
-          path: String)
-    tablekeys [["doc_id","path_id"]]
-    using transaction_time(tt_from, tt_to)
-  from db
-}
-
-
-
