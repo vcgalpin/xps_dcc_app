@@ -1,6 +1,6 @@
 ### Use
 
-To start the XPS DCC web application, type the following on the command line
+To start the XPS DCC temporal DB application, type the following on the command line
 
 links --config=config.0.9.8 src/startXPS.links
 
@@ -8,16 +8,10 @@ This assumes that appropriate databases are available and a running PostgreSQL s
 
 ### Docker
 
-A demo image is available at https://hub.docker.com/repository/docker/vcgalpin/xps_dcc_app/
+Two Docker images are available:
 
-To run this image, use
-```
-docker run -d \
-  --name tempdb_simple_web \
-  -p 8080:8080 \
-  -v tempdb_simple_web_pgdata:/opt/postgres-data \
-  vcgalpin/xps_dcc_app:tempdb_simple_web_test
-```
+* Provides a demo version of the web application: https://github.com/vcgalpin/tempdb_simple_web_docker
+* Provides the web app together with a bash shell: https://github.com/vcgalpin/tempdb_web_shell_docker
 
 
 
