@@ -12,8 +12,8 @@ To run `linx`, various packages such as opam and PostgreSQL must be installed, a
 
 Two Docker images are available:
 
-* Provides a demo version of the web application: https://github.com/vcgalpin/tempdb_simple_web_docker
-* Provides the web app together with a bash shell: https://github.com/vcgalpin/tempdb_web_shell_docker
+* https://github.com/vcgalpin/tempdb_simple_web_docker provides a demo version of the web application 
+*  https://github.com/vcgalpin/tempdb_web_shell_docker provides the web app together with a bash shell
 
 The Docker images include all required packages. When a container is run from an image, the relevant database tables are created.
 
